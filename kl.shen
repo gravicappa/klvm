@@ -10,6 +10,9 @@ args: <a1 a2 ... an>
 
 *\
 
+(package reg-kl- [shen-mk-func shen-get-arg shen-get-reg
+                  shen-set-reg! shen-mk-closure]
+
 (define mk-context
   Toplevel N -> (@v Toplevel N <>))
 
@@ -85,79 +88,79 @@ args: <a1 a2 ... an>
   X -> [shen-get-arg (- (- 0 X) 1)] where (< X 0)
   X -> [shen-get-reg X])
 
-(define kl-walk-let-expr
+(define walk-let-expr
   X V Env Used C true -> (let Unused (difference (map head Env) Used)
                               I (new-var-idx-or-reuse X Env Unused)
                               Env' [[X | (fst I)] | Env]
-                              R (kl-walk-expr V Env (snd I) C)
+                              R (walk-expr V Env (snd I) C)
                               RE (mk-shen-set-reg (fst I) R)
                            (@p RE Env'))
-  X V Env Used C false -> (@p (kl-walk-expr V Env Used C) Env))
+  X V Env Used C false -> (@p (walk-expr V Env Used C) Env))
 
-(define kl-walk-let
+(define walk-let
   X V Body Env Used C -> (let U (used-vars Body [X | Env])
                               E? (element? X U)
                               U' (append U Used)
-                              R1 (kl-walk-let-expr X V Env U' C E?)
+                              R1 (walk-let-expr X V Env U' C E?)
                               E (fst R1)
                               S1 (snd R1)
                               UV (used-vars V Env)
-                              B (remove-do (kl-walk-expr Body S1 UV C))
+                              B (remove-do (walk-expr Body S1 UV C))
                               Expr (if (cons? E)
                                        [E | B]
                                        B)
                            [do | Expr]))
 
-(define kl-walk-do-aux
+(define walk-do-aux
   [] _ _ _ Acc -> Acc
-  [X | Y] Env [U | V] C Acc -> (let E (kl-walk-expr X Env U C)
+  [X | Y] Env [U | V] C Acc -> (let E (walk-expr X Env U C)
                                     Acc (append Acc (remove-do E))
-                                 (kl-walk-do-aux Y Env V C Acc)))
+                                 (walk-do-aux Y Env V C Acc)))
 
-(define kl-walk-do
+(define walk-do
   X Env Used C -> (let U (used-vars-cascade X Env Used)
-                       E (kl-walk-do-aux X Env U C [])
+                       E (walk-do-aux X Env U C [])
                     [do | E]))
 
-(define kl-walk-apply-aux
+(define walk-apply-aux
   [] _ _ _ Acc -> (reverse Acc)
-  [X | Y] Env [U | V] C Acc -> (let E (kl-walk-expr X Env U C)
-                                 (kl-walk-apply-aux Y Env V C [E | Acc])))
+  [X | Y] Env [U | V] C Acc -> (let E (walk-expr X Env U C)
+                                 (walk-apply-aux Y Env V C [E | Acc])))
 
-(define kl-walk-apply
+(define walk-apply
   X Env Used C -> (let U (used-vars-cascade X Env Used)
-                    (kl-walk-apply-aux X Env U C [])))
+                    (walk-apply-aux X Env U C [])))
 
 (define mk-closure-kl
-  Args Env Mapping Body -> [shen-mk-closure Args Env Mapping Body])
+  Args Init Body -> [shen-mk-closure Args Init Body])
 
-(define mk-closure-env-mapping
-  _ [] M -> M
-  Env [[X | I] | Env'] M -> (let Y [(var-idx X Env) | I]
-                              (mk-closure-env-mapping Env Env' [Y | M])))
+(define mk-closure-args-init
+  [] _ M -> (reverse M)
+  [U | Used] Env M -> (let Y (mk-shen-get-reg (var-idx U Env))
+                        (mk-closure-args-init Used Env [Y | M])))
 
 (define mk-closure-env
   [] Acc -> Acc
   [X | U] Acc -> (mk-closure-env U [[X | (new-var-idx X Acc)] | Acc]))
 
-(define kl-walk-lambda-aux
-  X [lambda Y | Body] Args Env Used C -> (kl-walk-lambda-aux
+(define walk-lambda-aux
+  X [lambda Y | Body] Args Env Used C -> (walk-lambda-aux
                                            Y Body [X | Args] Env Used C)
-  X Body Args Env Used C -> (let Args (reverse [X | Args])
+  X Body Args Env Used C -> (let Args (append Used (reverse [X | Args]))
                                  Env' (mk-closure-env Used [])
-                                 Mapping (mk-closure-env-mapping Env Env' [])
+                                 Init (mk-closure-args-init Used Env [])
                                  Code (mk-function-kl Args Body Env' C)
-                              (mk-closure-kl Args Env' Mapping Code)))
+                              (mk-closure-kl Args Init Code)))
 
-(define kl-walk-lambda
+(define walk-lambda
   X Code Args Env Used C -> (let U (used-vars Code Env)
-                              (kl-walk-lambda-aux X Code Args Env U C)))
+                              (walk-lambda-aux X Code Args Env U C)))
 
-(define kl-walk-expr
-  [let X V Body] Env Used C -> (kl-walk-let X V Body Env Used C)
-  [do | Code] Env Used C -> (kl-walk-do Code Env Used C)
-  [lambda X B] Env Used C -> (kl-walk-lambda X B [] Env Used C)
-  [X | A] Env Used C -> (kl-walk-apply [X | A] Env Used C)
+(define walk-expr
+  [let X V Body] Env Used C -> (walk-let X V Body Env Used C)
+  [do | Code] Env Used C -> (walk-do Code Env Used C)
+  [lambda X B] Env Used C -> (walk-lambda X B [] Env Used C)
+  [X | A] Env Used C -> (walk-apply [X | A] Env Used C)
   X Env _ _ -> (mk-shen-get-reg (var-idx X Env))
                where (and (var-defined? X Env) (symbol? X))
   X _ _ _ -> X)
@@ -168,23 +171,23 @@ args: <a1 a2 ... an>
 
 (define mk-function-kl
   Args Body Env C -> (let Env (mk-defun-env Args -1 Env)
-                       (kl-walk-expr Body Env (used-vars Body Args) C)))
+                       (walk-expr Body Env (used-vars Body Args) C)))
 
 (define mk-defun-kl
   F Args Body Env C -> (let X (mk-function-kl Args Body Env C)
                          [shen-mk-func F Args X]))
 
-(define kl-walk-toplevel
+(define walk-toplevel
   [defun F Args Body] Acc -> (let C (mk-context Acc 0)
                                   X (mk-defun-kl F Args Body [] C)
                                [X | (context-toplevel C)])
   [lambda _ _] Acc -> Acc
   X Acc -> (let C (mk-context Acc 0)
-             [(kl-walk-expr X [] [] C) | (context-toplevel C)]))
+             [(walk-expr X [] [] C) | (context-toplevel C)]))
 
-(define kl-walk-aux
+(define walk-aux
   [] Acc -> (reverse Acc)
-  [X | R] Acc -> (kl-walk-aux R (kl-walk-toplevel X Acc)))
+  [X | R] Acc -> (walk-aux R (walk-toplevel X Acc)))
 
-(define kl-walk
-  Exprs -> (kl-walk-aux Exprs []))
+(define walk
+  Exprs -> (walk-aux Exprs [])))
