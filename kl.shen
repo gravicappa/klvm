@@ -64,10 +64,6 @@ args: <a1 a2 ... an>
 (define used-vars
   X G -> (used-vars-aux X G [] []))
 
-(define new-var-idx-or-reuse
-  X Env [] -> (@p (new-var-idx X Env) [])
-  X Env [U | Unused] -> (@p (var-idx U Env) Unused))
-
 (define remove-do
   [do | X] -> X
   X -> [X])
@@ -88,11 +84,22 @@ args: <a1 a2 ... an>
   X -> [shen-get-arg (- (- 0 X) 1)] where (< X 0)
   X -> [shen-get-reg X])
 
+(define reuse-idx
+  X [] -> (fail)
+  X [[X | J] | R] -> (@p J X) where (>= J 0)
+  X [_ | R] -> (reuse-idx X R))
+
+(define new-var-idx-or-reuse
+  X Env [] -> (@p (new-var-idx X Env) [])
+  X Env [U | Unused] <- (reuse-idx U Env)
+  X Env [U | Unused] -> (new-var-idx-or-reuse X Env Unused))
+
 (define walk-let-expr
   X V Env Used C true -> (let Unused (difference (map head Env) Used)
                               I (new-var-idx-or-reuse X Env Unused)
                               Env' [[X | (fst I)] | Env]
-                              R (walk-expr V Env (snd I) C)
+                              Unused1 (remove (snd I) Unused)
+                              R (walk-expr V Env Unused1 C)
                               RE (mk-shen-set-reg (fst I) R)
                            (@p RE Env'))
   X V Env Used C false -> (@p (walk-expr V Env Used C) Env))
