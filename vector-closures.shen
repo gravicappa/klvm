@@ -1,32 +1,9 @@
-\*
-
-## Vector-based closures
-
-<type fn env nargs args>
-
-fn: (closure --> args-vector) --> A
-env: <v1 v2 ... vn>
-args: <a1 a2 ... an>
-
-*\
-
 (package reg-kl- [shen-mk-func shen-get-arg shen-get-reg
                   shen-set-reg! shen-mk-closure]
 
-(define mk-context
-  Toplevel N -> (@v Toplevel N <>))
-
-(define context-toplevel->
-  C X -> (vector-> C 1 X))
-
-(define context-toplevel
-  C -> (<-vector C 1))
-
-(define context-nvars->
-  C X -> (vector-> C 2 X))
-
-(define context-nvars
-  C -> (<-vector C 2))
+(defstruct context
+  (toplevel s-expr)
+  (nvars number))
 
 (define var-idx-aux
   X I [] -> (error "Unknown var: ~A~%" X)
@@ -98,8 +75,7 @@ args: <a1 a2 ... an>
   X V Env Used C true -> (let Unused (difference (map head Env) Used)
                               I (new-var-idx-or-reuse X Env Unused)
                               Env' [[X | (fst I)] | Env]
-                              Unused1 (remove (snd I) Unused)
-                              R (walk-expr V Env Unused1 C)
+                              R (walk-expr V Env [(snd I) | Used] C)
                               RE (mk-shen-set-reg (fst I) R)
                            (@p RE Env'))
   X V Env Used C false -> (@p (walk-expr V Env Used C) Env))
@@ -107,12 +83,13 @@ args: <a1 a2 ... an>
 (define walk-let
   X V Body Env Used C -> (let U (used-vars Body [X | Env])
                               E? (element? X U)
-                              U' (append U Used)
-                              R1 (walk-let-expr X V Env U' C E?)
+                              R1 (walk-let-expr X V Env Used C E?)
                               E (fst R1)
                               S1 (snd R1)
-                              UV (used-vars V Env)
-                              B (remove-do (walk-expr Body S1 UV C))
+                              U'' (if E?
+                                      [X | Used]
+                                      Used)
+                              B (remove-do (walk-expr Body S1 U'' C))
                               Expr (if (cons? E)
                                        [E | B]
                                        B)
@@ -163,10 +140,17 @@ args: <a1 a2 ... an>
   X Code Args Env Used C -> (let U (used-vars Code Env)
                               (walk-lambda-aux X Code Args Env U C)))
 
+(define lift-defun
+  F Args Body C -> (let C' (mk-context (context-toplevel C) 0)
+                        X (mk-defun-kl F Args Body [] C')
+                        TL (context-toplevel-> C [X | (context-toplevel C')])
+                     [function F]))
+
 (define walk-expr
   [let X V Body] Env Used C -> (walk-let X V Body Env Used C)
   [do | Code] Env Used C -> (walk-do Code Env Used C)
   [lambda X B] Env Used C -> (walk-lambda X B [] Env Used C)
+  [defun F Args Body] Env Used C -> (lift-defun F Args Body C)
   [X | A] Env Used C -> (walk-apply [X | A] Env Used C)
   X Env _ _ -> (mk-shen-get-reg (var-idx X Env))
                where (and (var-defined? X Env) (symbol? X))
@@ -188,9 +172,9 @@ args: <a1 a2 ... an>
   [defun F Args Body] Acc -> (let C (mk-context Acc 0)
                                   X (mk-defun-kl F Args Body [] C)
                                [X | (context-toplevel C)])
-  [lambda _ _] Acc -> Acc
   X Acc -> (let C (mk-context Acc 0)
-             [(walk-expr X [] [] C) | (context-toplevel C)]))
+                X (walk-expr X [] [] C)
+             [X | (context-toplevel C)]))
 
 (define walk-aux
   [] Acc -> (reverse Acc)
