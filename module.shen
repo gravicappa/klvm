@@ -1,6 +1,6 @@
-(register-module [[name: vector-closures]
+(register-module [[name: reg-kl]
                   [author: "Ramil Farkshatov"]
                   [license: "GPLv3+"]
-                  [desc: "Vector closure code translator."]
+                  [desc: "Registers KL code translator."]
                   [depends: defstruct]
-                  [load: "vector-closures.shen"]])
+                  [load: "reg-kl.shen"]])
