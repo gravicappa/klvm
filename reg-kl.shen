@@ -172,6 +172,15 @@
 (define walk-lambda
   X Code Args Env _ _ C -> (let U (used-vars Code Env)
                              (walk-lambda-aux X Code Args Env U C)))
+(define mk-freeze-kl
+  Init Body -> [shen-mk-freeze Init Body])
+
+(define walk-freeze
+  X Env Used Unext C -> (let U (used-vars X Env)
+                             Init (mk-closure-args-init U Env [])
+                             Env' (mk-closure-env Used [])
+                             Code (mk-function-kl [] X Env' C)
+                          (mk-freeze-kl Init Code)))
 
 (define lift-defun
   F Args Body C -> (let C' (mk-context (context-toplevel C) 0)
@@ -183,6 +192,7 @@
   [let X V Body] Env Used Unext C -> (walk-let X V Body Env Used Unext C)
   [do | Code] Env Used Unext C -> (walk-do Code Env Used Unext C)
   [lambda X B] Env Used Unext C -> (walk-lambda X B [] Env Used Unext C)
+  [freeze X] Env Used Unext C -> (walk-freeze X Env Used Unext C)
   [defun F Args Body] _ _ _ C -> (lift-defun F Args Body C)
   [X | A] Env Used Unext C -> (walk-apply [X | A] Env Used Unext C)
   X Env _ _ _ -> (mk-shen-get-reg (var-idx X Env))
