@@ -60,6 +60,13 @@
   [do | X] -> X
   X -> [X])
 
+(define remove-duplicates-aux
+  [] Acc -> (reverse Acc)
+  [X | R] Acc -> (remove-duplicates-aux R (adjoin X Acc)))
+
+(define remove-duplicates
+  X -> (remove-duplicates-aux X []))
+
 (define used-vars-cascade-aux
   [] _ _ Acc -> Acc
   [X | Y] Env UAcc Acc -> (let U (used-vars-aux X Env [] UAcc)
@@ -115,7 +122,7 @@
           R (walk-let-expr X V Env U Used Unext C E?)
           I (fst R)
           Env' (snd R)
-          B (remove-do (walk-expr Body Env' U' Unext C))
+          B (remove-do (walk-expr Body Env' (append U Unext) Unext C))
           Expr (if (cons? I)
                    [I | B]
                    B)
@@ -148,6 +155,24 @@
   X Env Used Unext C -> (let U (used-vars-cascade X Env Used)
                           (walk-apply-aux X Env U Unext C [])))
 
+(define walk-if
+  If Then Else Env Used Unext C -> (let UT (used-vars-aux Then Env [] Unext)
+                                        UE (used-vars-aux Else Env [] Unext)
+                                        U (append UT UE)
+                                        If' (walk-expr If Env Used U C)
+                                        Then' (walk-expr Then Env UT Unext C)
+                                        Else' (walk-expr Else Env UE Unext C)
+                                     [if If' Then' Else']))
+
+(define walk-cond
+  [] _ _ _ _ -> [error "error: cond failure"]
+  [[If Then] | Else] Env Used Unext C
+  -> (let UT (used-vars-aux Then Env [] Unext)
+          UE (used-vars-aux Else Env [] Unext)
+          UI (used-vars-aux If Env [] (append UT UE))
+          Else (walk-cond Else Env Used Unext C)
+       (walk-if If Then Else Env UI UE C)))
+
 (define mk-closure-kl
   Args Init Body -> [shen-mk-closure Args Init Body])
 
@@ -160,27 +185,27 @@
   [] Acc -> Acc
   [X | U] Acc -> (mk-closure-env U [[X | (new-var-idx X Acc)] | Acc]))
 
+(define mk-closure-list
+  Args Body Env Used C -> (let Env' (mk-closure-env Used [])
+                               Init (mk-closure-args-init Used Env [])
+                               Code (mk-function-kl Args Body Env' C)
+                            [Init Code]))
+
 (define walk-lambda-aux
-  X [lambda Y | Body] Args Env Used C -> (walk-lambda-aux
-                                           Y Body [X | Args] Env Used C)
-  X Body Args Env Used C -> (let Args (append Used (reverse [X | Args]))
-                                 Env' (mk-closure-env Used [])
-                                 Init (mk-closure-args-init Used Env [])
-                                 Code (mk-function-kl Args Body Env' C)
-                              (mk-closure-kl Args Init Code)))
+  X [lambda Y Body] Args Env Used C -> (walk-lambda-aux
+                                         Y Body [X | Args] Env Used C)
+  X Body Args Env Used C -> (let Args (reverse [X | Args])
+                                 A (append Used (reverse [X | Args]))
+                                 X (mk-closure-list A Body Env Used C)
+                              [shen-mk-closure Args | X]))
 
 (define walk-lambda
-  X Code Args Env _ _ C -> (let U (used-vars Code Env)
-                             (walk-lambda-aux X Code Args Env U C)))
-(define mk-freeze-kl
-  Init Body -> [shen-mk-freeze Init Body])
+  X Code Args Env C -> (let U (used-vars [lambda X Code] Env)
+                         (walk-lambda-aux X Code Args Env U C)))
 
 (define walk-freeze
-  X Env Used Unext C -> (let U (used-vars X Env)
-                             Init (mk-closure-args-init U Env [])
-                             Env' (mk-closure-env Used [])
-                             Code (mk-function-kl [] X Env' C)
-                          (mk-freeze-kl Init Code)))
+  Code Env Used C -> (let X (mk-closure-list Used Code Env Used C)
+                       [shen-mk-freeze | X]))
 
 (define lift-defun
   F Args Body C -> (let C' (mk-context (context-toplevel C) 0)
@@ -190,9 +215,11 @@
 
 (define walk-expr
   [let X V Body] Env Used Unext C -> (walk-let X V Body Env Used Unext C)
+  [if X Then Else] Env Used Unext C -> (walk-if X Then Else Env Used Unext C)
+  [cond | B] Env Used Unext C -> (walk-cond B Env Used Unext C)
   [do | Code] Env Used Unext C -> (walk-do Code Env Used Unext C)
-  [lambda X B] Env Used Unext C -> (walk-lambda X B [] Env Used Unext C)
-  [freeze X] Env Used Unext C -> (walk-freeze X Env Used Unext C)
+  [lambda X B] Env _ _ C -> (walk-lambda X B [] Env C)
+  [freeze X] Env Used _ C -> (walk-freeze X Env Used C)
   [defun F Args Body] _ _ _ C -> (lift-defun F Args Body C)
   [X | A] Env Used Unext C -> (walk-apply [X | A] Env Used Unext C)
   X Env _ _ _ -> (mk-shen-get-reg (var-idx X Env))
@@ -204,7 +231,8 @@
   [X | A] I Acc -> (mk-defun-env A (- I 1) [[X | I] | Acc]))
 
 (define mk-function-kl
-  Args Body Env C -> (let Env (mk-defun-env Args -1 Env)
+  Args Body Env C -> (let Args (remove-duplicates Args)
+                          Env (mk-defun-env Args -1 Env)
                           U (used-vars Body Args)
                        (walk-expr Body Env U [] C)))
 
