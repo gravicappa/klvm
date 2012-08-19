@@ -19,14 +19,14 @@ This KL code
 
 =>
 
-		[[shen-mk-func one [X]
-		  [do [shen-set-reg! 0 [func1 [shen-get-arg 0] a]]
-					[shen-set-reg! 1 [func2 [shen-get-arg 0] [shen-get-reg 0]]]
-					[shen-set-reg! 1 [func3 [shen-get-reg 0] [shen-get-reg 1]]]
-					[shen-mk-closure 
-					  [A B]
-						[[shen-get-reg 1]]
-						[[shen-get-arg 2] [shen-get-arg 1] [shen-get-arg 0]]]]]]
+    [[shen-mk-func one [X]
+      [do [shen-set-reg! 0 [func1 [shen-get-arg 0] a]]
+          [shen-set-reg! 1 [func2 [shen-get-arg 0] [shen-get-reg 0]]]
+          [shen-set-reg! 1 [func3 [shen-get-reg 0] [shen-get-reg 1]]]
+          [shen-mk-closure
+            [A B]
+            [[shen-get-reg 1]]
+            [[shen-get-arg 2] [shen-get-arg 1] [shen-get-arg 0]]]]]]
 
 Each function or closure is represented as a procedure, required arguments and
 a vector with closure variables. For a function closure vector is empty. If a
@@ -36,8 +36,8 @@ closure contains given variables. Python pseudocode explains it better.
     >>> def plus_fn(Args):
           if len(Args) < 2:                    # if arguments are not enough
             [function_tag, plus_fn, 2, Args]   # return closure
-            Args[0] + Args[1]                  
-    
+            Args[0] + Args[1]
+
     >>> plus = [function_tag, plus_fn, 2, []]  # define function plus
 
     >>> call(plus, [1, 2])
@@ -81,15 +81,27 @@ Is obvious.
 
 ## [shen-set-reg! Reg Value]
 
+Opcode for setting Value to register Reg.
+
 ## [shen-get-reg Reg]
+
+Opcode for getting value of register Reg.
 
 ## [shen-get-arg Arg]
 
+Opcode for getting value of argument Arg.
+
 ## [shen-mk-closure Args Init-list Code]
+
+Opcode defining closure with arguments Args, initializing list for argument registers, code.
+
+## [shen-mk-freeze Init-list Code]
+
+Opcode defining freeze with initializing list for argument registers and code.
 
 # Known issues
 
-* Translates `cond` into cascade of `if`:
+## Translates `cond` into cascade of `if`:
 
     (reg-kl-walk [[defun func [A]
                     [cond [[= A 1] one]
@@ -107,4 +119,4 @@ Is obvious.
                    many
                    [error "error: cond failure"]]]]]]
 
-* Information about variables names is lost.
+## Information about variables names is lost.
