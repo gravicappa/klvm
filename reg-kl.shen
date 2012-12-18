@@ -18,7 +18,7 @@
 
 (defstruct context
   (toplevel s-expr)
-  (nvars number))
+  (nregs number))
 
 (define var-idx-aux
   X I [] -> (error "Unknown var: ~A~%" X)
@@ -101,12 +101,17 @@
 (define add-var
   X I Env -> (add-var-aux X I Env []))
 
+(define max
+  X Y -> X where (> X Y)
+  _ Y -> Y)
+
 (define walk-let-expr
   X V Env Used-in-body Used Unext C true
   -> (let Used' (remove X Used-in-body)
           Unext' (append Used' Unext)
           Unused (difference (map head Env) Unext')
           I (new-var-idx-or-reuse X Env Unused)
+          _ (context-nregs-> C (max (+ I 1) (context-nregs C)))
           Env' (add-var X I Env)
           R (walk-expr V Env Used Unext' C)
        (@p (mk-shen-set-reg I R) Env'))
