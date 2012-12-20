@@ -105,6 +105,19 @@
   X Y -> X where (> X Y)
   _ Y -> Y)
 
+(define setreg-unexpr
+  I [X] Acc -> (reverse [(mk-shen-set-reg I X) | Acc])
+  I [X | Rest] Acc -> (setreg-unexpr I Rest [X | Acc])
+  I X Acc -> (mk-shen-set-reg I X))
+
+(define mk-shen-set-reg-unexpr
+  I [do] -> (error "Broken do expression")
+  I [do | X] -> [do | (map (mk-shen-set-reg-unexpr I) X)]
+  I [if If Then Else] -> (let Then' (mk-shen-set-reg-unexpr I Then)
+                              Else' (mk-shen-set-reg-unexpr I Else)
+                           [if If Then' Else'])
+  I X -> (mk-shen-set-reg I X))
+
 (define walk-let-expr
   X V Env Used-in-body Used Unext C true
   -> (let Used' (remove X Used-in-body)
@@ -113,8 +126,8 @@
           I (new-var-idx-or-reuse X Env Unused)
           _ (context-nregs-> C (max (+ I 1) (context-nregs C)))
           Env' (add-var X I Env)
-          R (walk-expr V Env Used Unext' C)
-       (@p (mk-shen-set-reg I R) Env'))
+          Expr (walk-expr V Env Used Unext' C)
+       (@p (mk-shen-set-reg-unexpr I Expr) Env'))
   _ V Env _ Used Unext C false -> (@p (walk-expr V Env Used Unext C) Env))
 
 (define walk-let
