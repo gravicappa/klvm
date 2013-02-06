@@ -215,15 +215,20 @@
   X Body Args Env Used C -> (let Args (reverse [X | Args])
                                  A (append Used (reverse [X | Args]))
                                  X (mk-closure-list A Body Env Used C)
-                              [shen-mk-closure Args | X]))
+                              [shen-mk-closure Args (context-nregs C) | X]))
 
 (define walk-lambda
   X Code Args Env C -> (let U (used-vars [lambda X Code] Env)
-                         (walk-lambda-aux X Code Args Env U C)))
+                            C' (mk-context (context-toplevel C) 0)
+                            X (walk-lambda-aux X Code Args Env U C')
+                            TL (context-toplevel-> C (context-toplevel C'))
+                         X))
 
 (define walk-freeze
-  Code Env Used C -> (let X (mk-closure-list Used Code Env Used C)
-                       [shen-mk-freeze | X]))
+  Code Env Used C -> (let C' (mk-context (context-toplevel C) 0)
+                          X (mk-closure-list Used Code Env Used C')
+                          TL (context-toplevel-> C (context-toplevel C'))
+                       [shen-mk-freeze (context-nregs C') | X]))
 
 (define lift-defun
   F Args Body C -> (let C' (mk-context (context-toplevel C) 0)
@@ -255,8 +260,10 @@
                        (walk-expr Body Env U [] C)))
 
 (define mk-defun-kl
-  F Args Body Env C -> (let X (mk-function-kl Args Body Env C)
-                         [shen-mk-func F Args X]))
+  F Args Body Env C -> (let C' (mk-context (context-toplevel C) 0)
+                            X (mk-function-kl Args Body Env C')
+                            TL (context-toplevel-> C (context-toplevel C'))
+                         [shen-mk-func F Args (context-nregs C') X]))
 
 (define walk-toplevel
   [defun F Args Body] Acc -> (let C (mk-context Acc 0)
