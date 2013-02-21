@@ -1,0 +1,10 @@
+#!/bin/sh
+exclude="
+  klvm-lambda
+  klvm-runtime
+  klvm-trap-error
+  klvm-call-error-handler
+  klvm-from-kl
+"
+expr="$(echo $exclude | sed 's/ /\\|/g')"
+grep -o 'klvm-[a-z0-9<>-]*' <kl-trans.shen | grep -v "$expr" | sort -u
