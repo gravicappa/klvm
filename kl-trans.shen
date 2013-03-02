@@ -24,13 +24,6 @@
   N C Acc -> (do (kl-imp-close-label C Acc)
                  [[klvm-label N]]))
 
-(define kl-imp-expr3
-  [type | X] C Acc -> [[type | (kl-imp-expr3 X C [])] | Acc]
-  [shen-get-reg R] C Acc -> [[klvm-reg (+ (impcontext-nargs C) R 1)] | Acc]
-  [shen-get-arg R] C Acc -> [[klvm-reg (+ R 1)] | Acc]
-  X _ _ -> (fail) where (cons? X)
-  X _ Acc -> [X | Acc])
-
 (define kl-imp-push-stack-aux
   N N _ Acc -> Acc
   Except N Except Acc -> (kl-imp-push-stack-aux (+ Except 1) N Except Acc)
@@ -112,7 +105,7 @@
        Acc [[klvm-reg-> [0] (+ (impcontext-label C) 1)] | Acc]
        Acc (kl-imp-set-args [] 0 Args C Acc)
        X (if (cons? F)
-             (head (kl-imp-expr3 F C []))
+             (kl-imp-expr3 F C)
              F)
        Acc (kl-imp-call-func X (length Args) false C Acc)
        Acc (kl-imp-label (kl-imp-next-label C) C Acc)
@@ -121,10 +114,10 @@
 
   F Args Return-reg C Acc ->
   (let Acc (kl-imp-push-stack Return-reg C Acc)
-       X (kl-imp-expr3 F C [])
-       Acc (prepend [[klvm-closure-> | X]
+       X (kl-imp-expr3 F C)
+       Acc (prepend [[klvm-closure-> X]
                      [klvm-nregs-> [(+ (length Args) 1) [klvm-closure-nargs]]]
-                     [klvm-pop-closure-args | X]
+                     [klvm-pop-closure-args X]
                      [klvm-reg-> [0] (+ (impcontext-label C) 1)]]
                     Acc)
        Acc (kl-imp-set-args [[klvm-closure-nargs]] 0 Args C Acc)
@@ -145,13 +138,13 @@
                              Acc))
                   where (symbol? F)
   F Args C Acc -> (let N (length Args)
-                       X (kl-imp-expr3 F C [])
                        Acc (kl-imp-push-stack _ C Acc)
+                       X (kl-imp-expr3 F C)
                        Acc (prepend [[klvm-nargs-> [klvm-stack 0]]
-                                     [klvm-closure-> | X]
+                                     [klvm-closure-> X]
                                      [klvm-nregs->
                                       [[klvm-nargs] N [klvm-closure-nargs]]]
-                                     [klvm-pop-closure-args | X]]
+                                     [klvm-pop-closure-args X]]
                                     Acc)
                        Acc (kl-imp-set-args
                             [[klvm-closure-nargs]] 0 Args C Acc)
@@ -162,16 +155,19 @@
                               [klvm-call [klvm-closure-func]]]
                              Acc)))
 
+(define kl-imp-return-val*
+  Val Acc -> [[klvm-nargs>0
+               [[klvm-nregs-> [[klvm-nargs]]]
+                [klvm-dec-stack-ptr [klvm-nargs]]
+                [klvm-pop-extra-args [klvm-nargs]]
+                [klvm-call Val]]
+               [[klvm-reg-> [1] Val]
+                [klvm-return]]]
+              | Acc])
+
 (define kl-imp-return-val
   Val Acc -> (let Acc [[klvm-nargs-> [klvm-stack 0]] | Acc]
-                  X [klvm-nargs>0
-                     [[klvm-nregs-> [[klvm-nargs]]]
-                      [klvm-dec-stack-ptr [klvm-nargs]]
-                      [klvm-pop-extra-args [klvm-nargs]]
-                      [klvm-call Val]]
-                     [[klvm-reg-> [1] Val]
-                      [klvm-return]]]
-               [X | Acc]))
+               (kl-imp-return-val* Val Acc)))
 
 (define kl-imp-return
   Target-reg Acc -> (kl-imp-return-val [klvm-reg Target-reg] Acc))
@@ -179,7 +175,7 @@
 
 (define kl-imp-closure-init-aux
   I [] C Acc -> Acc
-  I [X | Init] C Acc -> (let Y [klvm-stack-> I | (kl-imp-expr3 X C [])]
+  I [X | Init] C Acc -> (let Y [klvm-stack-> I (kl-imp-expr3 X C)]
                           (kl-imp-closure-init-aux (+ I 1) Init C [Y | Acc])))
 
 (define kl-imp-closure-init
@@ -233,19 +229,40 @@
 (define kl-imp-apply-native
   X _ _ _ _ -> (fail) where (= X (fail))
   X [] _ C Acc -> [X | Acc]
-  X Return-reg true C Acc -> (kl-imp-return-val X Acc)
+  X _ true C Acc -> (kl-imp-return-val X Acc)
   X Return-reg false C Acc -> [[klvm-reg-> [Return-reg] X] | Acc])
 
 (define kl-imp-native
   _ _ _ C _ -> (fail) where (= (impcontext-native-hook C) _)
-  X Return-reg Tail? C Acc -> (let F (/. X (kl-imp-expr3 X C []))
+  X Return-reg Tail? C Acc -> (let F (/. X (kl-imp-expr3 X C))
                                    Y ((impcontext-native-hook C) F X)
                                 (kl-imp-apply-native
                                  Y Return-reg Tail? C Acc)))
 
-(define kl-imp-expr2
-  X _ _ C Acc <- (kl-imp-expr3 X C Acc)
+(define kl-imp-expr3*
+  [type X Type] C -> [type (kl-imp-expr3 X C) Type]
+  [shen-get-reg R] C -> [klvm-reg (+ (impcontext-nargs C) R 1)]
+  [shen-get-arg R] C -> [klvm-reg (+ R 1)]
+  X _ -> (fail) where (cons? X)
+  X _ -> X)
 
+(define kl-imp-expr3
+  X C <- (kl-imp-expr3* X C)
+  X _ -> (error "Unexpected L3 expression ~S" X))
+
+(define kl-imp-expr2**
+  X _ _ _ -> (fail) where (= X (fail))
+  X [] true Acc -> (kl-imp-return-val X Acc)
+  X Return-reg false Acc -> [[klvm-reg-> [Return-reg] X] | Acc])
+
+(define kl-imp-expr2*
+  X Return-reg Tail? C Acc <- (kl-imp-expr2** (kl-imp-expr3* X C)
+                                              Return-reg
+                                              Tail?
+                                              Acc)
+  _ _ _ _ _ -> (fail))
+
+(define kl-imp-expr2
   [shen-mk-closure Args Nregs Init Code] [] true C Acc ->
   (kl-imp-closure [] Args Nregs Init Code C Acc)
 
@@ -265,9 +282,10 @@
   [[klvm-reg-> [Return-reg] [klvm-error-unwind-get-handler]] | Acc]
 
   X Return-reg Tail? C Acc <- (kl-imp-native X Return-reg Tail? C Acc)
+  X Return-reg Tail? C Acc <- (kl-imp-expr2* X Return-reg Tail? C Acc)
   [F | Args] _ true C Acc -> (kl-imp-tailcall F Args C Acc)
   [F | Args] Return-reg false C Acc -> (kl-imp-call F Args Return-reg C Acc)
-  X _ Tail? C Acc -> [X | Acc])
+  X _ _ _ _ -> (error "Unexpected L2 expression ~S" X))
 
 (define kl-imp-do
   [X] true C Acc -> (kl-imp-expr1 X true C Acc)
@@ -275,30 +293,42 @@
   [X | Rest] Tail? C Acc -> (let Acc' (kl-imp-expr1 X false C Acc)
                               (kl-imp-do Rest Tail? C Acc')))
 
+(define kl-imp-if-expr
+  X X-label _ true C Acc -> (let L (kl-imp-label X-label C Acc)
+                              (kl-imp-expr1 X true C L))
+  X X-label After-label false C Acc -> (let L (kl-imp-label X-label C Acc)
+                                            Acc (kl-imp-expr1 X false C L)
+                                         [[klvm-goto After-label] | Acc]))
+
 (define kl-imp-if
   [[shen-get-reg R] Then Else] Tail? C Acc ->
   (let If-label (kl-imp-next-label C)
+       After-label (kl-imp-next-label C)
        Acc [[klvm-goto If-label] | Acc]
        Then-label (kl-imp-next-label C)
-       Acc (kl-imp-expr1 Then Tail? C (kl-imp-label Then-label C Acc))
+       Acc (kl-imp-if-expr Then Then-label After-label Tail? C Acc)
        Else-label (kl-imp-next-label C)
-       Acc (kl-imp-expr1 Else Tail? C (kl-imp-label Else-label C Acc))
+       Acc (kl-imp-if-expr Else Else-label After-label Tail? C Acc)
        R' (+ (impcontext-nargs C) R 1)
        Acc (kl-imp-label If-label C Acc)
-    [[if [klvm-reg R'] [klvm-goto Then-label] [klvm-goto Else-label]] | Acc])
-  X _ _ _ -> (error "Broken or unpreprocessed KLambda [~A]." X))
+       X [if [klvm-reg R'] [klvm-goto Then-label] [klvm-goto Else-label]]
+       Acc [X | Acc]
+    (if Tail?
+        Acc
+        (kl-imp-label After-label C Acc)))
+  X _ _ _ -> (error "Broken or unpreprocessed KLambda ~S." X))
 
 (define kl-imp-expr1
   [do | X] Tail? C Acc -> (kl-imp-do X Tail? C Acc)
   [if | X] Tail? C Acc -> (kl-imp-if X Tail? C Acc)
   [shen-get-reg R] true C Acc -> (let N (+ (impcontext-nargs C) R 1)
                                    (kl-imp-return N Acc))
-  [shen-get-reg R] false C Acc -> (error "Nontail (shen-get-reg ~A)" R)
+  [shen-get-reg R] false C Acc -> (error "Nontail (shen-get-reg ~S)" R)
   [shen-set-reg! R Code] false C Acc -> (let N (+ (impcontext-nargs C) R 1)
                                           (kl-imp-expr2 Code N false C Acc))
-  [shen-set-reg! R Code] true C Acc -> (error "Tail [shen-set-reg!]")
+  [shen-set-reg! R Code] true C Acc -> Acc
   [shen-get-arg R] true C Acc -> (kl-imp-return (+ R 1) Acc)
-  [shen-get-arg R] false C Acc -> (error "Nontail (shen-get-arg).")
+  [shen-get-arg R] false C Acc -> Acc
 
   [shen-mk-closure Args Nregs Init Code] true C Acc ->
   (kl-imp-closure [] Args Nregs Init Code C Acc)
@@ -311,12 +341,12 @@
   [shen-mk-freeze Nregs Init Code] false _ Acc -> Acc
 
   [klvm-push-error-handler E] _ C Acc ->
-  [[klvm-push-error-handler | (kl-imp-expr3 E C [])] | Acc]
+  [[klvm-push-error-handler (kl-imp-expr3 E C)] | Acc]
 
   [klvm-pop-error-handler] _ _ Acc -> [[klvm-pop-error-handler] | Acc]
   [F | Args] true C Acc -> (kl-imp-expr2 [F | Args] 1 true C Acc)
   [F | Args] false C Acc -> (kl-imp-expr2 [F | Args] [] false C Acc)
-  [X | Y] _ _ _ -> (error "Broken or unpreprocessed KLambda ~A." [X | Y])
+  [X | Y] _ _ _ -> (error "Broken or unpreprocessed KLambda ~S." [X | Y])
   X false _ Acc -> Acc
   X true _ Acc -> (kl-imp-return-val X Acc))
 
@@ -349,7 +379,7 @@
        Acc (impcontext-toplevel C)
     [[shen-mk-func Name Args Nregs (reverse (impcontext-func C))] | Acc])
   [X] _ Acc -> [[klvm-call X] [klvm-nargs-> [0]] | Acc]
-  X _ _ -> (error "Unexpected toplevel expression [~A]." X))
+  X _ _ -> (error "Unexpected toplevel expression ~S." X))
 
 (define kl-imp-toplevel
   [] _ Acc -> (reverse Acc)
@@ -359,11 +389,8 @@
   F X -> (kl-imp-toplevel (reg-kl-walk (map (function kl-unwind) X)) F []))
 
 (define kl-imp-template-func-body
-  Nargs-sym Func-sym -> (let X [(kl-imp-func-entry* Nargs-sym)
-                                [klvm-nregs-> [2]]
-                                [klvm-stack-size 2]
-                                [klvm-stack-> 0 [klvm-nargs]]]
-                             X (kl-imp-return-val [Func-sym] X)
+  Nargs-sym Func-sym -> (let X [(kl-imp-func-entry* Nargs-sym)]
+                             X (kl-imp-return-val* [Func-sym] X)
                           [[[klvm-label 0] | (reverse X)]]))
 
 (define klvm-runtime
