@@ -110,9 +110,13 @@
   I [X | Rest] Acc -> (setreg-unexpr I Rest [X | Acc])
   I X Acc -> (mk-shen-set-reg I X))
 
+(define setreg-do-expr
+  _ [] _ -> (error "Broken `do` expression.")
+  I [X] Acc -> (reverse [(mk-shen-set-reg-unexpr I X) | Acc])
+  I [X | Y] Acc -> (setreg-do-expr I Y [X | Acc]))
+
 (define mk-shen-set-reg-unexpr
-  I [do] -> (error "Broken do expression")
-  I [do | X] -> [do | (map (mk-shen-set-reg-unexpr I) X)]
+  I [do | X] -> [do | (setreg-do-expr I X [])]
   I [if If Then Else] -> (let Then' (mk-shen-set-reg-unexpr I Then)
                               Else' (mk-shen-set-reg-unexpr I Else)
                            [if If Then' Else'])
@@ -134,9 +138,6 @@
   X V Body Env Used Unext C
   -> (let U (used-vars Body [X | Env])
           E? (element? X U)
-          U' (if E?
-                 [X | Used]
-                 Used)
           R (walk-let-expr X V Env U Used Unext C E?)
           I (fst R)
           Env' (snd R)
