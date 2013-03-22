@@ -270,9 +270,10 @@
   [defun F Args Body] Acc -> (let C (mk-context Acc 0)
                                   X (mk-defun-kl F Args Body [] C)
                                [X | (context-toplevel C)])
-  X Acc -> (let Name (gensym shen-toplevel-)
-                Acc (walk-toplevel [defun Name [] X] Acc)
-             [[Name] | Acc]))
+  [X | Y] Acc -> (let Name (gensym shen-toplevel-)
+                      Acc (walk-toplevel [defun Name [] [X | Y]] Acc)
+                   [[Name] | Acc])
+  X Acc -> Acc)
 
 (define walk-aux
   [] Acc -> (reverse Acc)
