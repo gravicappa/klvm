@@ -384,7 +384,8 @@
   _ _ -> (fail))
 
 (define klvm-from-kl
-  F X -> (kl-imp-toplevel (reg-kl-walk (map (function kl-unwind) X)) F []))
+  F X -> (let X' (reg-kl-walk (map (function kl-unwind) X) false)
+           (kl-imp-toplevel X'  F [])))
 
 (define kl-imp-template-func-body
   Nargs-sym Func-sym -> (let X [(kl-imp-func-entry-template Nargs-sym)

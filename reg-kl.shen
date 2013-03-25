@@ -192,9 +192,6 @@
           Else (walk-cond Else Env Used Unext C)
        (walk-if If Then Else Env UI UE C)))
 
-(define mk-closure-kl
-  Args Init Body -> [shen-mk-closure Args Init Body])
-
 (define mk-closure-args-init
   [] _ M -> (reverse M)
   [U | Used] Env M -> (let Y (mk-shen-get-reg (var-idx U Env))
@@ -267,17 +264,19 @@
                          [shen-mk-func F Args (context-nregs C') X]))
 
 (define walk-toplevel
-  [defun F Args Body] Acc -> (let C (mk-context Acc 0)
-                                  X (mk-defun-kl F Args Body [] C)
-                               [X | (context-toplevel C)])
-  [X | Y] Acc -> (let Name (gensym shen-toplevel-)
-                      Acc (walk-toplevel [defun Name [] [X | Y]] Acc)
-                   [[Name] | Acc])
-  X Acc -> Acc)
+  [defun F Args Body] _ Acc -> (let C (mk-context Acc 0)
+                                    X (mk-defun-kl F Args Body [] C)
+                                 [X | (context-toplevel C)])
+  [X | Y] Elim? Acc -> (let Name (gensym shen-toplevel-)
+                            X' [defun Name [] [X | Y]]
+                         [[Name] | (walk-toplevel X' Elim? Acc)])
+  X true Acc -> Acc
+  X false Acc -> [X | Acc])
 
 (define walk-aux
-  [] Acc -> (reverse Acc)
-  [X | R] Acc -> (walk-aux R (walk-toplevel X Acc)))
+  [] _ Acc -> (reverse Acc)
+  [X | R] Elim? Acc -> (walk-aux R Elim? (walk-toplevel X Elim? Acc)))
 
 (define walk
-  Exprs -> (walk-aux Exprs [])))
+  Exprs Elim-toplevel-atoms? -> (walk-aux Exprs Elim-toplevel-atoms? []))
+)
