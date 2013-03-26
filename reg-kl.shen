@@ -13,8 +13,8 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>. *\
 
-(package reg-kl- [shen-get-arg shen-get-reg shen-set-reg! shen-mk-closure
-                  shen-mk-func shen-mk-freeze]
+(package reg-kl [shen-get-arg shen-get-reg shen-set-reg! shen-mk-closure
+                 shen-mk-func shen-mk-freeze]
 
 (defstruct context
   (toplevel s-expr)

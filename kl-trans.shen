@@ -8,7 +8,7 @@
   (bind-funcs symbol)
   (native-hook (A --> impcontext --> A)))
 
-(define prepend
+(define kl-prepend
   X Acc -> (append (reverse X) Acc))
 
 (define kl-imp-next-label
@@ -79,14 +79,14 @@
   _ _ [X | _] _ _ -> (error "Unexpected arg expression ~R" X))
 
 (define kl-imp-call-func
-  F Nargs true C Acc -> (prepend [[klvm-nargs-> Nargs] [klvm-call F]] Acc)
+  F Nargs true C Acc -> (kl-prepend [[klvm-nargs-> Nargs] [klvm-call F]] Acc)
                         where (and (symbol? F)
                                    (or (= (impcontext-bind-funcs C) all)
                                        (and (= (impcontext-bind-funcs C) sys)
                                             (shen-sysfunc? F))))
 
-  F Nargs false C Acc -> (prepend [[klvm-nargs-> Nargs] [klvm-call F]]
-                                  (kl-imp-inc-stack-ptr C Acc))
+  F Nargs false C Acc -> (kl-prepend [[klvm-nargs-> Nargs] [klvm-call F]]
+                                     (kl-imp-inc-stack-ptr C Acc))
                          where (symbol? F)
 
   F Nargs true C Acc -> []
@@ -94,10 +94,10 @@
   F Nargs false C Acc ->
   (let N-regs (+ (impcontext-nargs C) (impcontext-nregs C))
        Acc (kl-imp-inc-stack-ptr C Acc)
-    (prepend [[klvm-nargs-> Nargs]
-              [klvm-inc-nargs [klvm-closure-nargs]]
-              [klvm-call F]]
-             Acc)))
+    (kl-prepend [[klvm-nargs-> Nargs]
+                 [klvm-inc-nargs [klvm-closure-nargs]]
+                 [klvm-call F]]
+                Acc)))
 
 (define kl-imp-use-call-ret
   [] C Acc -> (kl-imp-pop-stack _ C Acc)
@@ -121,11 +121,12 @@
   F Args Return-reg C Acc ->
   (let Acc (kl-imp-push-stack _ C Acc)
        X (kl-imp-expr3 F C)
-       Acc (prepend [[klvm-closure-> X]
-                     [klvm-nregs-> [(+ (length Args) 1) [klvm-closure-nargs]]]
-                     [klvm-pop-closure-args X]
-                     [klvm-reg-> [0] (+ (impcontext-label C) 1)]]
-                    Acc)
+       Acc (kl-prepend [[klvm-closure-> X]
+                        [klvm-nregs-> [(+ (length Args) 1)
+                                       [klvm-closure-nargs]]]
+                        [klvm-pop-closure-args X]
+                        [klvm-reg-> [0] (+ (impcontext-label C) 1)]]
+                       Acc)
        Acc (kl-imp-set-args [[klvm-closure-nargs]] 0 Args C Acc)
        Acc (kl-imp-call-func [klvm-closure-func] (length Args) false C Acc)
        Acc (kl-imp-label (kl-imp-next-label C) C Acc)
@@ -135,31 +136,32 @@
   F Args C Acc -> (let N (length Args)
                        Acc (kl-imp-push-stack _ C Acc)
                        Acc (kl-imp-set-args [] 0 Args C Acc)
-                    (prepend [[klvm-nargs-> [klvm-stack 0]]
-                              [klvm-nregs-> [[klvm-nargs] N]]
-                              [klvm-dec-stack-ptr [klvm-nargs]]
-                              [klvm-pop-extra-args [klvm-nargs]]
-                              [klvm-inc-nargs N]
-                              [klvm-call F]]
-                             Acc))
+                    (kl-prepend [[klvm-nargs-> [klvm-stack 0]]
+                                 [klvm-nregs-> [[klvm-nargs] N]]
+                                 [klvm-dec-stack-ptr [klvm-nargs]]
+                                 [klvm-pop-extra-args [klvm-nargs]]
+                                 [klvm-inc-nargs N]
+                                 [klvm-call F]]
+                                Acc))
                   where (symbol? F)
   F Args C Acc -> (let N (length Args)
                        Acc (kl-imp-push-stack _ C Acc)
                        X (kl-imp-expr3 F C)
-                       Acc (prepend [[klvm-nargs-> [klvm-stack 0]]
-                                     [klvm-closure-> X]
-                                     [klvm-nregs->
-                                      [[klvm-nargs] N [klvm-closure-nargs]]]
-                                     [klvm-pop-closure-args X]]
-                                    Acc)
+                       Acc (kl-prepend
+                            [[klvm-nargs-> [klvm-stack 0]]
+                             [klvm-closure-> X]
+                             [klvm-nregs->
+                              [[klvm-nargs] N [klvm-closure-nargs]]]
+                             [klvm-pop-closure-args X]]
+                            Acc)
                        Acc (kl-imp-set-args
                             [[klvm-closure-nargs]] 0 Args C Acc)
-                    (prepend [[klvm-dec-stack-ptr [klvm-nargs]]
-                              [klvm-pop-extra-args [klvm-nargs]]
-                              [klvm-inc-nargs N]
-                              [klvm-inc-nargs [klvm-closure-nargs]]
-                              [klvm-call [klvm-closure-func]]]
-                             Acc)))
+                    (kl-prepend [[klvm-dec-stack-ptr [klvm-nargs]]
+                                 [klvm-pop-extra-args [klvm-nargs]]
+                                 [klvm-inc-nargs N]
+                                 [klvm-inc-nargs [klvm-closure-nargs]]
+                                 [klvm-call [klvm-closure-func]]]
+                                Acc)))
 
 (define kl-imp-return-template
   X -> [klvm-nargs>0
@@ -358,11 +360,11 @@
 (define kl-imp-func-entry
   C -> (let N (+ (impcontext-nargs C) (impcontext-nregs C) 2)
             Acc (kl-imp-label (kl-imp-next-label C) C [])
-         (prepend [(kl-imp-func-entry-template (impcontext-nargs C))
-                   [klvm-nregs-> [N]]
-                   [klvm-stack-size N]
-                   [klvm-stack-> 0 [klvm-nargs]]]
-                  Acc)))
+         (kl-prepend [(kl-imp-func-entry-template (impcontext-nargs C))
+                      [klvm-nregs-> [N]]
+                      [klvm-stack-size N]
+                      [klvm-stack-> 0 [klvm-nargs]]]
+                     Acc)))
 
 (define kl-imp-toplevel-expr
   [shen-mk-func Name Args Nregs Code] F Acc ->
@@ -380,12 +382,11 @@
   [X | Y] F Acc -> (kl-imp-toplevel Y F (kl-imp-toplevel-expr X F Acc)))
 
 (define klvm-null-fn
-  Y X <- (do (output "null: ~S~%" X) (fail))
   _ _ -> (fail))
 
 (define klvm-from-kl
-  F X -> (let X' (reg-kl-walk (map (function kl-unwind) X) false)
-           (kl-imp-toplevel X'  F [])))
+  F X -> (let X' (reg-kl.walk (map (function kl-unwind) X) false)
+           (kl-imp-toplevel X' F [])))
 
 (define kl-imp-template-func-body
   Nargs-sym Func-sym -> (let X [(kl-imp-func-entry-template Nargs-sym)
@@ -411,17 +412,19 @@
          [X]]
        ]))
 
+(set klvm.*silence* true)
+
 (define klvm-dump
   Srcdir F Dstdir -> (let D (make-string "~A~A.klvm" Dstdir F)
                           S (make-string "~A~A" Srcdir F)
                           Kl (map (function kl-from-shen) (read-file S))
-                          _ (if (= (value shen-*hush*) hushed)
+                          _ (if (value klvm.*silence*)
                                 _
                                 (output "== ~A -> ~A~%" S D))
-                       (backend-write-file (klvm-from-kl Kl) D)))
+                          X (klvm-from-kl (function klvm-null-fn) Kl)
+                       (backend-utils.write-file X D)))
 
 (declare klvm-dump [string --> [string --> [string --> boolean]]])
-(declare dump-to-file [string --> [string --> boolean]])
 
 (if (trap-error (do (register-dumper) true) (/. _ false))
     (register-dumper klvm all klvm-dump)
