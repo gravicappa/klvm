@@ -13,8 +13,8 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>. *\
 
-(package reg-kl [shen-get-arg shen-get-reg shen-set-reg! shen-mk-closure
-                 shen-mk-func shen-mk-freeze]
+(package reg-kl [shen-get-arg shen-get-reg shen-set-reg! shen-closure
+                 shen-func shen-toplevel shen-freeze]
 
 (defstruct context
   (toplevel s-expr)
@@ -213,7 +213,7 @@
   X Body Args Env Used C -> (let Args (reverse [X | Args])
                                  A (append Used (reverse [X | Args]))
                                  X (mk-closure-list A Body Env Used C)
-                              [shen-mk-closure Args (context-nregs C) | X]))
+                              [shen-closure Args (context-nregs C) | X]))
 
 (define walk-lambda
   X Code Args Env C -> (let U (used-vars [lambda X Code] Env)
@@ -226,7 +226,7 @@
   Code Env Used C -> (let C' (mk-context (context-toplevel C) 0)
                           X (mk-closure-list Used Code Env Used C')
                           TL (context-toplevel-> C (context-toplevel C'))
-                       [shen-mk-freeze (context-nregs C') | X]))
+                       [shen-freeze (context-nregs C') | X]))
 
 (define lift-defun
   F Args Body C -> (let C' (mk-context (context-toplevel C) 0)
@@ -257,19 +257,26 @@
                           U (used-vars Body Args)
                        (walk-expr Body Env U [] C)))
 
+(define defun-hdr
+  true -> shen-toplevel
+  false -> shen-func)
+
 (define mk-defun-kl
-  F Args Body Env C -> (let C' (mk-context (context-toplevel C) 0)
-                            X (mk-function-kl Args Body Env C')
-                            TL (context-toplevel-> C (context-toplevel C'))
-                         [shen-mk-func F Args (context-nregs C') X]))
+  F Args Body Env Toplevel? C ->
+  (let C' (mk-context (context-toplevel C) 0)
+       X (mk-function-kl Args Body Env C')
+       TL (context-toplevel-> C (context-toplevel C'))
+    [(defun-hdr Toplevel?) F Args (context-nregs C') X]))
+
+(define walk-defun
+  F Args Body Toplevel? Acc -> (let C (mk-context Acc 0)
+                                    X (mk-defun-kl F Args Body [] Toplevel? C)
+                                 [X | (context-toplevel C)]))
 
 (define walk-toplevel
-  [defun F Args Body] _ Acc -> (let C (mk-context Acc 0)
-                                    X (mk-defun-kl F Args Body [] C)
-                                 [X | (context-toplevel C)])
-  [X | Y] Elim? Acc -> (let Name (gensym shen-toplevel-)
-                            X' [defun Name [] [X | Y]]
-                         [[Name] | (walk-toplevel X' Elim? Acc)])
+  [defun F Args Body] _ Acc -> (walk-defun F Args Body false Acc)
+  [X | Y] _ Acc -> (let Name (gensym shen-toplevel-)
+                     (walk-defun Name [] [X | Y] true Acc))
   X true Acc -> Acc
   X false Acc -> [X | Acc])
 

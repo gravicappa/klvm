@@ -83,11 +83,12 @@
                         where (and (symbol? F)
                                    (or (= (impcontext-bind-funcs C) all)
                                        (and (= (impcontext-bind-funcs C) sys)
-                                            (shen-sysfunc? F))))
+                                            (shen.sysfunc? F))))
 
   F Nargs false C Acc -> (kl-prepend [[klvm-nargs-> Nargs] [klvm-call F]]
                                      (kl-imp-inc-stack-ptr C Acc))
-                         where (symbol? F)
+                         where (and (symbol? F)
+                                    (= (impcontext-bind-funcs C) all))
 
   F Nargs true C Acc -> []
 
@@ -116,7 +117,7 @@
        Acc (kl-imp-call-func X (length Args) false C Acc)
        Acc (kl-imp-label (kl-imp-next-label C) C Acc)
     (kl-imp-use-call-ret Return-reg C Acc))
-  where (symbol? F)
+  where (and (symbol? F) (= (impcontext-bind-funcs C) all))
 
   F Args Return-reg C Acc ->
   (let Acc (kl-imp-push-stack _ C Acc)
@@ -124,7 +125,7 @@
        Acc (kl-prepend [[klvm-closure-> X]
                         [klvm-nregs-> [(+ (length Args) 1)
                                        [klvm-closure-nargs]]]
-                        [klvm-pop-closure-args X]
+                        [klvm-pop-closure-args]
                         [klvm-reg-> [0] (+ (impcontext-label C) 1)]]
                        Acc)
        Acc (kl-imp-set-args [[klvm-closure-nargs]] 0 Args C Acc)
@@ -143,7 +144,7 @@
                                  [klvm-inc-nargs N]
                                  [klvm-call F]]
                                 Acc))
-                  where (symbol? F)
+                  where (and (symbol? F) (= (impcontext-bind-funcs C) all))
   F Args C Acc -> (let N (length Args)
                        Acc (kl-imp-push-stack _ C Acc)
                        X (kl-imp-expr3 F C)
@@ -152,7 +153,7 @@
                              [klvm-closure-> X]
                              [klvm-nregs->
                               [[klvm-nargs] N [klvm-closure-nargs]]]
-                             [klvm-pop-closure-args X]]
+                             [klvm-pop-closure-args]]
                             Acc)
                        Acc (kl-imp-set-args
                             [[klvm-closure-nargs]] 0 Args C Acc)
@@ -202,7 +203,7 @@
        F (gensym klvm-lambda)
        TL (impcontext-toplevel C)
        A (kl-imp-closure-args (protect A) 0 Nargs [])
-       TL (kl-imp-toplevel-expr [shen-mk-func F A Nregs Code]
+       TL (kl-imp-toplevel-expr [shen-closure F A Nregs Code]
                                 (impcontext-native-hook C)
                                 TL)
        _ (impcontext-toplevel-> C TL)
@@ -260,16 +261,16 @@
                                 (kl-imp-expr2'' X' Return-reg Tail? C Acc)))
 
 (define kl-imp-expr2
-  [shen-mk-closure Args Nregs Init Code] [] true C Acc ->
+  [shen-closure Args Nregs Init Code] [] true C Acc ->
   (kl-imp-closure [] Args Nregs Init Code C Acc)
 
-  [shen-mk-closure Args Nregs Init Code] Return-reg _ C Acc ->
+  [shen-closure Args Nregs Init Code] Return-reg _ C Acc ->
   (kl-imp-closure Return-reg Args Nregs Init Code C Acc)
 
-  [shen-mk-freeze Nregs Init Code] Return-reg _ C Acc ->
+  [shen-freeze Nregs Init Code] Return-reg _ C Acc ->
   (kl-imp-freeze Return-reg Nregs Init Code C Acc)
 
-  [shen-mk-freeze Nregs Init Code] [] true C Acc ->
+  [shen-freeze Nregs Init Code] [] true C Acc ->
   (kl-imp-freeze [] Nregs Init Code C Acc)
 
   [klvm-current-error] Return-reg _ C Acc ->
@@ -326,15 +327,15 @@
   [shen-get-arg R] true C Acc -> (kl-imp-return (+ R 1) C Acc)
   [shen-get-arg R] false C Acc -> Acc
 
-  [shen-mk-closure Args Nregs Init Code] true C Acc ->
+  [shen-closure Args Nregs Init Code] true C Acc ->
   (kl-imp-closure [] Args Nregs Init Code C Acc)
 
-  [shen-mk-closure Args Nregs Init Code] false _ Acc -> Acc
+  [shen-closure Args Nregs Init Code] false _ Acc -> Acc
 
-  [shen-mk-freeze Nregs Init Code] true C Acc ->
+  [shen-freeze Nregs Init Code] true C Acc ->
   (kl-imp-freeze Nregs Init Code C Acc)
 
-  [shen-mk-freeze Nregs Init Code] false _ Acc -> Acc
+  [shen-freeze Nregs Init Code] false _ Acc -> Acc
 
   [klvm-push-error-handler E] _ C Acc ->
   [[klvm-push-error-handler (kl-imp-expr3 E C)] | Acc]
@@ -366,16 +367,23 @@
                       [klvm-stack-> 0 [klvm-nargs]]]
                      Acc)))
 
+(define kl-imp-func-hdr
+  shen-func -> klvm-func
+  shen-closure -> klvm-closure
+  shen-toplevel -> klvm-toplevel)
+
 (define kl-imp-toplevel-expr
-  [shen-mk-func Name Args Nregs Code] F Acc ->
+  [Head Name Args Nregs Code] F Acc ->
   (let C (mk-impcontext (length Args) Nregs -1 [] Acc [] none F)
        X (kl-imp-func-entry C)
        X (kl-imp-expr1 Code true C X)
        X (kl-imp-close-label C X)
        Acc (impcontext-toplevel C)
-    [[shen-mk-func Name Args Nregs (reverse (impcontext-func C))] | Acc])
-  [X] _ Acc -> [[klvm-call X] [klvm-nargs-> [0]] | Acc]
-  X _ _ -> (error "Unexpected toplevel expression ~S." X))
+       H (kl-imp-func-hdr Head)
+    [[H Name Args Nregs (reverse (impcontext-func C))] | Acc])
+  where (element? Head [shen-func shen-toplevel shen-closure])
+  [X | Y] _ _ -> (error "Unexpected toplevel expression ~S." [X | Y])
+  X _ Acc -> [X | Acc])
 
 (define kl-imp-toplevel
   [] _ Acc -> (reverse Acc)
@@ -447,11 +455,12 @@
 (define kl-imp-show-code
   [] -> (do (output "~%")
             true)
-  [[shen-mk-func Name Args Nregs Code] | Y] ->
-  (let . (output "  [shen-mk-func ~S ~S ~S~%" Name Args Nregs)
+  [[Head Name Args Nregs Code] | Y] ->
+  (let . (output "  [~A ~S ~S ~S~%" Head Name Args Nregs)
        . (kl-imp-for-each (function kl-imp-show-label-code) Code)
        . (output "  ]~%")
     (kl-imp-show-code Y))
+  where (element? Head [klvm-func klvm-toplevel klvm-closure])
   [X | Y] -> (let S (value *maximum-print-sequence-size*)
                   . (set *maximum-print-sequence-size* -1)
                   T1 (output "  ~S~%" X)
