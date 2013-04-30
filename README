@@ -1,6 +1,0 @@
-# Overview
-
-reg-kl is a code translator that eliminates `let`, `lambda` constructions from
-KL. It is useful for translating KL into languages that don't have sane
-lambdas (Python, Java, C), closures (Java, C), have weird scope (js). Mind
-that KL-code it emits requires further processing.
