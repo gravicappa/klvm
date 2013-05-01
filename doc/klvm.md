@@ -1,34 +1,107 @@
 # KLVM Description
 
+VM consists of
+
+  - stack,
+  - stack pointer,
+  - registers vector,
+  - `nargs` special register,
+  - stack of error handlers.
+
 ## KLVM operators
 
 ### klvm-call
 
-    [klvm-call Obj]
+    [klvm-call Func]
+
+Jump to function Func.
 
 ### klvm-closure->
 
     [klvm-closure-> Obj]
 
+Store closure object Obj in a special register or local variable for further
+use.
+
 ### klvm-closure-func
 
     [klvm-closure-func]
+
+Return pointer to function of a stored by `klvm-closure->` closure.
 
 ### klvm-closure-nargs
 
     [klvm-closure-nargs]
 
+Return number of arguments of a stored by `klvm-closure->` closure.
+
 ### klvm-current-error
-### klvm-dec-nargs
-### klvm-dec-stack-ptr
-### klvm-error-unwind-get-handler
-### klvm-func-obj
-### klvm-goto
+
+    [klvm-current-error]
+
+Return current error object.
+
 ### klvm-inc-nargs
+
+    [klvm-inc-nargs Increment]
+
+Increase the value of `nargs` register by `Increment`.
+
+### klvm-dec-nargs
+
+    [klvm-dec-nargs Decrement]
+
+Decrease the value of `nargs` register by `Decrement`.
+
 ### klvm-inc-stack-ptr
+
+    [klvm-inc-stack-ptr Increment]
+
+Increase stack pointer by `Increment`.
+
+### klvm-dec-stack-ptr
+
+    [klvm-dec-stack-ptr Decrement]
+
+Decrease stack pointer by `Decrement`.
+
+### klvm-error-unwind-get-handler
+
+    [klvm-error-unwind-get-handler]
+
+Unwind stack to error handler scope and returns 1-place error handler
+function.
+
+### klvm-func-obj
+
+    [klvm-func-obj]
+
+Return current function object.
+
+### klvm-goto
+
+    [klvm-goto X]
+
+Jump to label X.
+
 ### klvm-label
+
+    [[klvm-label X]
+     ...
+     ...]
+
+Define label `X`.
+
 ### klvm-mk-closure
+
+    [klvm-mk-closure Function Nargs Ninit]
+
 ### klvm-nargs
+
+    [klvm-nargs]
+
+Return the value of `nargs` register.
+
 ### klvm-nargs->
 ### klvm-nargs>0
 ### klvm-nargs-cond
