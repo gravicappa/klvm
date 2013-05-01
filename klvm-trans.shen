@@ -427,7 +427,7 @@
   [] _ Acc -> (reverse Acc)
   [X | Y] F Acc -> (imp-toplevel Y F (imp-toplevel-expr X F Acc)))
 
-(define klvm-null-fn
+(define null-fn
   _ _ -> (fail))
 
 (define klvm-from-kl
@@ -465,7 +465,7 @@
                           _ (if (value *hush*)
                                 _
                                 (output "** ~A -> ~A~%" S D))
-                          X (klvm-from-kl (function klvm-null-fn) Kl)
+                          X (klvm-from-kl (function null-fn) Kl)
                        (backend-utils.write-file X D)))
 
 (declare klvm-dump [string --> [string --> [string --> boolean]]])
