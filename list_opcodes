@@ -5,6 +5,7 @@ exclude="
   klvm-trap-error
   klvm-call-error-handler
   klvm-from-kl
+  klvm-thaw
 "
 expr="$(echo $exclude | sed 's/ /\\|/g')"
 dir="$(dirname "$0")"

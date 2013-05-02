@@ -1,6 +1,6 @@
 # KLVM Description
 
-VM consists of
+VM uses
 
   - stack,
   - stack pointer,
@@ -8,19 +8,24 @@ VM consists of
   - `nargs` special register,
   - stack of error handlers.
 
+### Calling a function
+
+Parameters passed to the function are put in registers vector starting from
+index 1. At index 0 stored next label where VM jumps after calling function.
+
 ## KLVM operators
 
 ### klvm-call
 
     [klvm-call Func]
 
-Jump to function Func.
+Jump to function `Func`.
 
 ### klvm-closure->
 
     [klvm-closure-> Obj]
 
-Store closure object Obj in a special register or local variable for further
+Store closure object `Obj` in a special register or local variable for further
 use.
 
 ### klvm-closure-func
@@ -78,6 +83,115 @@ function.
 
 Return current function object.
 
+### klvm-nargs
+
+    [klvm-nargs]
+
+Return the value of `nargs` register.
+
+### klvm-nargs->
+
+    [klvm-nargs-> X]
+
+Sets the value to `nargs` register to `X`.
+
+### klvm-nargs>0
+
+    [klvm-nargs>0
+      A
+      B]
+
+If the value of `nargs` register > 0 execute KLVM expressions `A`, else
+execute `B`.
+
+### klvm-nargs-cond
+
+    [klvm-nargs-cond
+      A
+      B
+      C]
+
+If the value of `nargs` register is less than number of function's parameters
+execute KLVM expression `A`. If the value of `nargs` register is equal to
+number of parameters then execute `B`. And if the value of `nargs` is greater
+than number of parameters then execute `C`.
+
+### klvm-nregs->
+
+    [klvm-nregs-> [A | B]]
+
+Ensure that the length of the registers vector is not less than the sum of
+values in list `[A | B]`.
+
+### klvm-reg
+
+    [klvm-reg X]
+
+Return the contents of register number `X`.
+
+### klvm-reg->
+
+    [klvm-reg-> [X | Y] V]
+
+Set the value `V` to register number of sum of values in list `[X | Y]`.
+
+### klvm-stack
+
+    [klvm-stack X]
+
+Return the contents of stack with the offset `X` from stack pointer.
+
+### klvm-stack->
+
+    [klvm-stack-> X Y]
+
+Sets the contents of stack item with the offset `X` from stack pointer to the
+value `Y`.
+
+### klvm-pop-closure-args
+
+    [klvm-pop-closure-args]
+
+Puts closure parameters to registers vector starting from index 1.
+
+### klvm-push-error-handler
+
+    [klvm-push-error-handler E]
+
+Push error handler `E`, stack pointer, `nargs` register, and register 0 into
+error handlers stack.
+
+### klvm-pop-error-handler
+
+    [klvm-pop-error-handler]
+
+Pop top element from error handlers stack.
+
+### klvm-push-extra-args
+
+    [klvm-push-extra-args X]
+
+Push `X` arguments registers vector beginning from index 1 to stack.
+
+### klvm-pop-extra-args
+
+    [klvm-pop-extra-args X]
+
+Pop `X` arguments from stack to registers vector beginning from index 1.
+
+### klvm-return
+
+    [klvm-return]
+
+Return from current code block. VM will run next taken from register 0.
+
+### klvm-stack-size
+
+    [klvm-stack-size X]
+
+Ensure that stack size if not less that `X`. Otherwise either increase stack
+size or raise an error.
+
 ### klvm-goto
 
     [klvm-goto X]
@@ -96,31 +210,28 @@ Define label `X`.
 
     [klvm-mk-closure Function Nargs Ninit]
 
-### klvm-nargs
+Create closure object with function pointer `Function`, number of parameters
+`Nargs`, and number of closure values `Ninit`. Closure values are taken from
+stack.
 
-    [klvm-nargs]
+### klvm-closure, klvm-func, klvm-toplevel
 
-Return the value of `nargs` register.
+  [klvm-closure Name Nargs Nregs Code]
+  [klvm-func Name Nargs Nregs Code]
+  [klvm-toplevel Name Nargs Nregs Code]
 
-### klvm-nargs->
-### klvm-nargs>0
-### klvm-nargs-cond
-### klvm-nregs->
-### klvm-pop-closure-args
-### klvm-pop-error-handler
-### klvm-pop-extra-args
-### klvm-push-error-handler
-### klvm-push-extra-args
-### klvm-reg
-### klvm-reg->
-### klvm-return
-### klvm-stack
-### klvm-stack->
-### klvm-stack-size
-### klvm-thaw
-### klvm-closure
-### klvm-func
-### klvm-toplevel
+Define a lambda, function or toplevel with name `Name`, number of parameters
+`Nargs`, number of used registers `Nregs` and code `Code`.
+
+The `Code` must have the following structure:
+
+    [[[klvm-label 0]
+      ...]
+     [[klvm-label 1]
+      ...]
+     ...]
+
+The order of labels is not important but label 0 must exist.
 
 ## Run loop
 ## Exception handling
