@@ -233,9 +233,16 @@ The `Code` must have the following structure:
 
 The order of labels is not important but label 0 must exist.
 
+### klvm-if
+
+    [klvm-if Cond-expr Then-expr Else-expr]
+
+If the value of `Cond-expr` is true then execute `Then-expr` else execute
+`Else-expr`.
+
 ## Operation levels
 
-### level 1 operations
+### toplevel operations
 
     klvm-closure
     klvm-func
@@ -243,8 +250,34 @@ The order of labels is not important but label 0 must exist.
     klvm-nargs->  
     klvm-call
 
-#### level 2 operations
+#### level 1 operations
 
+    klvm-return
+    klvm-dec-nargs
+
+[klvm-inc-nargs X] C -> (s [(indent C) (id "nargs") " += " (expr2 X C)
+[klvm-dec-nargs X] C -> (s [(indent C) (id "nargs") " -= " (expr2 X C)
+[klvm-stack-size X] C -> (s [(indent C) (id "stack_size") "(" (expr2 X C)
+[klvm-nregs-> X] C -> (s [(indent C) (id "reg_size") "(" (sum-expr X C "")
+[klvm-stack-> N X] C -> (s [(indent C) (id "stack") "[" (id "sp") " + "
+[klvm-reg-> [0] X] C -> (s [(indent C) (id "reg") "[0] = " (expr-label X C)
+[klvm-reg-> X Y] C -> (s [(indent C) (id "reg") "[" (sum-expr X C "") "] = "
+[klvm-inc-stack-ptr X] C -> (s [(indent C) (id' "sp") " += " (expr2 X C)
+[klvm-dec-stack-ptr X] C -> (s [(indent C) (id' "sp") " -= " (expr2 X C)
+[klvm-nargs-> X] C -> (s [(indent C) (id "nargs") " = " (expr2 X C) (endl)])
+[klvm-goto N] C -> (s [(indent C) "return " (func-name (label-sym N C))
+[klvm-call X] C -> (s [(indent C) "return " (id "fns")
+[klvm-call X] C -> (s [(indent C) "return " (expr2 X C) (endl)])
+[klvm-push-error-handler X] C -> (s [(indent C) (id "push_error_handler")
+[klvm-pop-error-handler] C -> (s [(indent C) (id "pop_error_handler") "()"
+[klvm-native X] C -> (s [(indent C) X (endl)])
+[klvm-nargs-cond X Y Z] C -> (nargs-cond X Y Z C)
+[klvm-nargs>0 X Y] C -> (nargs>0 X Y C)
+[klvm-push-extra-args [klvm-nargs]] C -> (push-extra-args C)
+[klvm-pop-extra-args [klvm-nargs]] C -> (pop-extra-args C)
+[klvm-put-closure-args] C -> (put-closure-args [] C)
+[if If Then Else] C -> (expr-if If Then Else C)
+[klvm-closure-> X] C -> (expr-closure X C)
 
 #### level 3 operations
 

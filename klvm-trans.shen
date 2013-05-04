@@ -13,6 +13,7 @@
                      klvm-error-unwind-get-handler
                      klvm-func-obj
                      klvm-goto
+                     klvm-if
                      klvm-inc-nargs
                      klvm-inc-stack-ptr
                      klvm-label
@@ -346,7 +347,7 @@
        Acc (imp-if-expr Else Else-label After-label Tail? C Acc)
        R' (+ (impcontext-nargs C) R 1)
        Acc (label If-label C Acc)
-       X [if [klvm-reg R'] [klvm-goto Then-label] [klvm-goto Else-label]]
+       X [klvm-if [klvm-reg R'] [klvm-goto Then-label] [klvm-goto Else-label]]
        Acc [X | Acc]
     (if Tail?
         Acc
