@@ -22,7 +22,7 @@
                      klvm-nargs>0
                      klvm-nargs-cond
                      klvm-nregs->
-                     klvm-pop-closure-args
+                     klvm-put-closure-args
                      klvm-pop-error-handler
                      klvm-pop-extra-args
                      klvm-push-error-handler
@@ -165,7 +165,7 @@
        Acc (prepend [[klvm-closure-> X]
                      [klvm-nregs-> [(+ (length Args) 1)
                                     [klvm-closure-nargs]]]
-                     [klvm-pop-closure-args]
+                     [klvm-put-closure-args]
                      [klvm-reg-> [0] (+ (impcontext-label C) 1)]]
                     Acc)
        Acc (imp-set-args [[klvm-closure-nargs]] 0 Args C Acc)
@@ -192,7 +192,7 @@
                                      [klvm-closure-> X]
                                      [klvm-nregs->
                                       [[klvm-nargs] N [klvm-closure-nargs]]]
-                                     [klvm-pop-closure-args]]
+                                     [klvm-put-closure-args]]
                                     Acc)
                        Acc (imp-set-args [[klvm-closure-nargs]] 0 Args C Acc)
                     (prepend [[klvm-dec-stack-ptr [klvm-nargs]]

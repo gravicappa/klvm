@@ -148,9 +148,9 @@ Return the contents of stack with the offset `X` from stack pointer.
 Sets the contents of stack item with the offset `X` from stack pointer to the
 value `Y`.
 
-### klvm-pop-closure-args
+### klvm-put-closure-args
 
-    [klvm-pop-closure-args]
+    [klvm-put-closure-args]
 
 Puts closure parameters to registers vector starting from index 1.
 
@@ -233,6 +233,21 @@ The `Code` must have the following structure:
 
 The order of labels is not important but label 0 must exist.
 
+## Operation levels
+
+### level 1 operations
+
+    klvm-closure
+    klvm-func
+    klvm-toplevel  
+    klvm-nargs->  
+    klvm-call
+
+#### level 2 operations
+
+
+#### level 3 operations
+
 ## Run loop
 ## Exception handling
 
@@ -269,7 +284,7 @@ The order of labels is not important but label 0 must exist.
       [klvm-stack-> 5 [klvm-reg 4]]
       [klvm-closure-> cons?]
       [klvm-nregs-> [2 [klvm-closure-nargs]]]
-      [klvm-pop-closure-args]
+      [klvm-put-closure-args]
       [klvm-reg-> [0] 1]
       [klvm-reg-> [1 [klvm-closure-nargs]] [klvm-stack 2]]
       [klvm-inc-stack-ptr 6]
@@ -292,7 +307,7 @@ The order of labels is not important but label 0 must exist.
       [klvm-stack-> 5 [klvm-reg 4]]
       [klvm-closure-> tl]
       [klvm-nregs-> [2 [klvm-closure-nargs]]]
-      [klvm-pop-closure-args]
+      [klvm-put-closure-args]
       [klvm-reg-> [0] 5]
       [klvm-reg-> [1 [klvm-closure-nargs]] [klvm-stack 2]]
       [klvm-inc-stack-ptr 6]
@@ -313,7 +328,7 @@ The order of labels is not important but label 0 must exist.
       [klvm-stack-> 5 [klvm-reg 4]]
       [klvm-closure-> +]
       [klvm-nregs-> [3 [klvm-closure-nargs]]]
-      [klvm-pop-closure-args]
+      [klvm-put-closure-args]
       [klvm-reg-> [0] 6]
       [klvm-reg-> [1 [klvm-closure-nargs]] [klvm-stack 3]]
       [klvm-reg-> [2 [klvm-closure-nargs]] 1]
@@ -336,7 +351,7 @@ The order of labels is not important but label 0 must exist.
       [klvm-nargs-> [klvm-stack 0]]
       [klvm-closure-> list-len-aux]
       [klvm-nregs-> [[klvm-nargs] 2 [klvm-closure-nargs]]]
-      [klvm-pop-closure-args]
+      [klvm-put-closure-args]
       [klvm-reg-> [1 [klvm-closure-nargs]] [klvm-stack 4]]
       [klvm-reg-> [2 [klvm-closure-nargs]] [klvm-stack 5]]
       [klvm-dec-stack-ptr [klvm-nargs]]
