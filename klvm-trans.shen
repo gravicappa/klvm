@@ -2,6 +2,10 @@
                      reg-kl.walk
                      shen-get-arg shen-get-reg shen-set-reg! shen-closure
                      shen-func shen-toplevel shen-freeze
+                     klvm-template-func-body
+                     klvm-runtime
+                     klvm-trap-error
+                     klvm-call-error-handler
 
                      klvm-call
                      klvm-closure->
@@ -181,7 +185,7 @@
                     (prepend [[klvm-nargs-> [klvm-stack 0]]
                               [klvm-nregs-> [[klvm-nargs] N]]
                               [klvm-dec-stack-ptr [klvm-nargs]]
-                              [klvm-pop-extra-args [klvm-nargs]]
+                              [klvm-pop-extra-args]
                               [klvm-inc-nargs N]
                               [klvm-call F]]
                              Acc))
@@ -197,7 +201,7 @@
                                     Acc)
                        Acc (imp-set-args [[klvm-closure-nargs]] 0 Args C Acc)
                     (prepend [[klvm-dec-stack-ptr [klvm-nargs]]
-                              [klvm-pop-extra-args [klvm-nargs]]
+                              [klvm-pop-extra-args]
                               [klvm-inc-nargs N]
                               [klvm-inc-nargs [klvm-closure-nargs]]
                               [klvm-call [klvm-closure-func]]]
@@ -207,7 +211,7 @@
   X -> [klvm-nargs>0
         [[klvm-nregs-> [[klvm-nargs]]]
          [klvm-dec-stack-ptr [klvm-nargs]]
-         [klvm-pop-extra-args [klvm-nargs]]
+         [klvm-pop-extra-args]
          [klvm-call X]]
         [[klvm-reg-> [1] X]
          [klvm-return]]])
@@ -394,7 +398,7 @@
             [[klvm-dec-nargs Nargs]]
             [[klvm-dec-nargs Nargs]
              [klvm-stack-size [klvm-nargs]]
-             [klvm-push-extra-args [klvm-nargs]]
+             [klvm-push-extra-args]
              [klvm-inc-stack-ptr [klvm-nargs]]]])
 
 (define imp-func-entry
@@ -435,7 +439,7 @@
   F X -> (let X' (reg-kl.walk (map (function deinline-expr.deinline) X) false)
            (imp-toplevel X' F [])))
 
-(define imp-template-func-body
+(define klvm-template-func-body
   Nargs-sym Func-sym -> (let X [(imp-func-entry-template Nargs-sym)
                                 (imp-return-template [Func-sym])]
                           [[[klvm-label 0] | X]]))
@@ -472,7 +476,7 @@
 (declare klvm-dump [string --> [string --> [string --> boolean]]])
 
 (if (trap-error (do (register-dumper) true) (/. _ false))
-    (register-dumper klvm all klvm-dump)
+    (register-dumper klvm s-expr klvm-dump)
     _)
 
 (define for-each

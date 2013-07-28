@@ -1,4 +1,4 @@
-(package deinline-expr []
+(package deinline-expr [klvm-trap-error]
 
 (define varname
   X [] -> X

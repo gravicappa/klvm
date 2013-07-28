@@ -8,18 +8,86 @@ VM uses
   - `nargs` special register,
   - stack of error handlers.
 
-### Calling a function
+## Calling a function
 
 Parameters passed to the function are put in registers vector starting from
 index 1. At index 0 stored next label where VM jumps after calling function.
 
+## Structure of KLVM code
+
+  [toplevel-expression
+   [[klvm-label 0]
+    [level-1-expression
+     [level-2-expression ...]
+     ...]
+    [level-1-expression
+     [level-2-expression ...]
+     ...]
+    [level-1-expression ...]]
+   [[klvm-label N]
+    [level-1-expression ...]
+    [level-1-expression ...]]
+   ...]
+
+### toplevel operations
+
+- klvm-closure
+- klvm-func
+- klvm-toplevel  
+- klvm-nargs->  
+- klvm-call
+
+`klvm-call` and `klvm-nargs->` are actually level 1 operations that can be in
+toplevel.
+
+#### level 1 operations
+
+- klvm-return
+- klvm-inc-nargs
+- klvm-dec-nargs
+- klvm-stack-size
+- klvm-nregs->
+- klvm-stack->
+- klvm-reg->
+- klvm-inc-stack-ptr
+- klvm-dec-stack-ptr
+- klvm-nargs->
+- klvm-goto
+- klvm-call
+- klvm-push-error-handler
+- klvm-pop-error-handler
+- klvm-nargs-cond
+- klvm-nargs>0
+- klvm-push-extra-args
+- klvm-pop-extra-args
+- klvm-put-closure-args
+- klvm-if
+- klvm-closure->
+
+#### level 2 operations 
+
+- klvm-closure-nargs
+- klvm-closure-func
+- klvm-func-obj
+- klvm-reg
+- klvm-stack
+- klvm-nargs
+- klvm-mk-closure
+- klvm-error-unwind-get-handler
+- klvm-current-error
+- fail
+- *constant atoms*
+
 ## KLVM operators
+
+For simplicity items starting with `X2-` prefix are level 2 operations, `X1-`
+are level 1 operations, `C-` are constants.
 
 ### klvm-call
 
-    [klvm-call Func]
+    [klvm-call X2-func]
 
-Jump to function `Func`.
+Jump to function `X2-func`.
 
 ### klvm-closure->
 
@@ -169,15 +237,15 @@ Pop top element from error handlers stack.
 
 ### klvm-push-extra-args
 
-    [klvm-push-extra-args X]
+    [klvm-push-extra-args]
 
-Push `X` arguments registers vector beginning from index 1 to stack.
+Push `nargs` arguments registers vector beginning from index 1 to stack.
 
 ### klvm-pop-extra-args
 
-    [klvm-pop-extra-args X]
+    [klvm-pop-extra-args]
 
-Pop `X` arguments from stack to registers vector beginning from index 1.
+Pop `nargs` arguments from stack to registers vector beginning from index 1.
 
 ### klvm-return
 
@@ -238,48 +306,8 @@ The order of labels is not important but label 0 must exist.
     [klvm-if Cond-expr Then-expr Else-expr]
 
 If the value of `Cond-expr` is true then execute `Then-expr` else execute
-`Else-expr`.
-
-## Operation levels
-
-### toplevel operations
-
-    klvm-closure
-    klvm-func
-    klvm-toplevel  
-    klvm-nargs->  
-    klvm-call
-
-#### level 1 operations
-
-    klvm-return
-    klvm-dec-nargs
-
-[klvm-inc-nargs X] C -> (s [(indent C) (id "nargs") " += " (expr2 X C)
-[klvm-dec-nargs X] C -> (s [(indent C) (id "nargs") " -= " (expr2 X C)
-[klvm-stack-size X] C -> (s [(indent C) (id "stack_size") "(" (expr2 X C)
-[klvm-nregs-> X] C -> (s [(indent C) (id "reg_size") "(" (sum-expr X C "")
-[klvm-stack-> N X] C -> (s [(indent C) (id "stack") "[" (id "sp") " + "
-[klvm-reg-> [0] X] C -> (s [(indent C) (id "reg") "[0] = " (expr-label X C)
-[klvm-reg-> X Y] C -> (s [(indent C) (id "reg") "[" (sum-expr X C "") "] = "
-[klvm-inc-stack-ptr X] C -> (s [(indent C) (id' "sp") " += " (expr2 X C)
-[klvm-dec-stack-ptr X] C -> (s [(indent C) (id' "sp") " -= " (expr2 X C)
-[klvm-nargs-> X] C -> (s [(indent C) (id "nargs") " = " (expr2 X C) (endl)])
-[klvm-goto N] C -> (s [(indent C) "return " (func-name (label-sym N C))
-[klvm-call X] C -> (s [(indent C) "return " (id "fns")
-[klvm-call X] C -> (s [(indent C) "return " (expr2 X C) (endl)])
-[klvm-push-error-handler X] C -> (s [(indent C) (id "push_error_handler")
-[klvm-pop-error-handler] C -> (s [(indent C) (id "pop_error_handler") "()"
-[klvm-native X] C -> (s [(indent C) X (endl)])
-[klvm-nargs-cond X Y Z] C -> (nargs-cond X Y Z C)
-[klvm-nargs>0 X Y] C -> (nargs>0 X Y C)
-[klvm-push-extra-args [klvm-nargs]] C -> (push-extra-args C)
-[klvm-pop-extra-args [klvm-nargs]] C -> (pop-extra-args C)
-[klvm-put-closure-args] C -> (put-closure-args [] C)
-[if If Then Else] C -> (expr-if If Then Else C)
-[klvm-closure-> X] C -> (expr-closure X C)
-
-#### level 3 operations
+`Else-expr`. `Cond-expr` is level 2 operation, `Then-expr` and `Else-expr` are
+level 1 operations.
 
 ## Run loop
 ## Exception handling

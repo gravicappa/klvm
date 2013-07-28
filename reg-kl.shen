@@ -274,6 +274,7 @@
                                  [X | (context-toplevel C)]))
 
 (define walk-toplevel
+  [defun fail [] | _] _ Acc -> Acc
   [defun F Args Body] _ Acc -> (walk-defun F Args Body false Acc)
   [X | Y] _ Acc -> (let Name (gensym shen-toplevel-)
                      (walk-defun Name [] [X | Y] true Acc))
