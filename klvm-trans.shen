@@ -43,7 +43,9 @@
                      klvm-func
                      klvm-toplevel]
 
-(defstruct impcontext
+(defstruct context
+  (func-name symbol)
+  (stack-size number)
   (nargs number)
   (nregs number)
   (label number)
@@ -51,18 +53,21 @@
   (toplevel s-expr)
   (primitives (list symbol))
   (bind-funcs symbol)
-  (native-hook (A --> impcontext --> A)))
+  (native-hook (A --> context --> A)))
+
+(define warn
+  X -> (output "Warning: ~A" X))
 
 (define prepend
   X Acc -> (append (reverse X) Acc))
 
 (define next-label
-  C -> (do (impcontext-label-> C (+ (impcontext-label C) 1))
-           (impcontext-label C)))
+  C -> (do (context-label-> C (+ (context-label C) 1))
+           (context-label C)))
 
 (define close-label
   C [] -> []
-  C Acc -> (do (impcontext-func-> C [(reverse Acc) | (impcontext-func C)])
+  C Acc -> (do (context-func-> C [(reverse Acc) | (context-func C)])
                []))
 
 (define label
@@ -76,7 +81,7 @@
                       (push-stack-aux (+ I 1) N Except Acc)))
 
 (define push-stack
-  Except C Acc -> (let N (+ (impcontext-nargs C) (impcontext-nregs C) 1)
+  Except C Acc -> (let N (+ (context-nargs C) (context-nregs C) 1)
                     (push-stack-aux 0 N Except Acc)))
 
 (define pop-stack-aux
@@ -86,12 +91,12 @@
                       (pop-stack-aux (+ I 1) N Except Acc)))
 
 (define pop-stack
-  Except C Acc -> (let N (+ (impcontext-nargs C) (impcontext-nregs C) 1)
+  Except C Acc -> (let N (+ (context-nargs C) (context-nregs C) 1)
                        Acc [[klvm-dec-stack-ptr (+ N 1)] | Acc]
                     (pop-stack-aux 0 N Except Acc)))
 
 (define stack-ptr
-  Op C Acc -> (let N (+ (impcontext-nargs C) (impcontext-nregs C) 2)
+  Op C Acc -> (let N (+ (context-nargs C) (context-nregs C) 2)
                 (if (= N 0)
                     Acc
                     [[Op N] | Acc])))
@@ -106,6 +111,8 @@
   _ _ X C _ -> (error "Unexpected arg expression ~R" X) where (= X (fail))
   Off I X C Acc -> [[klvm-reg-> [(+ I 1) | Off] X] | Acc])
 
+
+
 (define imp-set-args
   Off _ [] _ Acc -> Acc
 
@@ -114,7 +121,7 @@
     (imp-set-args Off (+ I 1) Y C Acc))
 
   Off I [[shen-get-reg X] | Y] C Acc ->
-  (let X' (+ (impcontext-nargs C) X 2)
+  (let X' (+ (context-nargs C) X 2)
        Acc [[klvm-reg-> [(+ I 1) | Off] [klvm-stack X']] | Acc]
     (imp-set-args Off (+ I 1) Y C Acc))
 
@@ -126,19 +133,19 @@
 (define imp-call-func
   F Nargs true C Acc -> (prepend [[klvm-nargs-> Nargs] [klvm-call F]] Acc)
                         where (and (symbol? F)
-                                   (or (= (impcontext-bind-funcs C) all)
-                                       (and (= (impcontext-bind-funcs C) sys)
+                                   (or (= (context-bind-funcs C) all)
+                                       (and (= (context-bind-funcs C) sys)
                                             (shen.sysfunc? F))))
 
   F Nargs false C Acc -> (prepend [[klvm-nargs-> Nargs] [klvm-call F]]
                                   (inc-stack-ptr C Acc))
                          where (and (symbol? F)
-                                    (= (impcontext-bind-funcs C) all))
+                                    (= (context-bind-funcs C) all))
 
   F Nargs true C Acc -> []
 
   F Nargs false C Acc ->
-  (let N-regs (+ (impcontext-nargs C) (impcontext-nregs C))
+  (let N-regs (+ (context-nargs C) (context-nregs C))
        Acc (inc-stack-ptr C Acc)
     (prepend [[klvm-nargs-> Nargs]
               [klvm-inc-nargs [klvm-closure-nargs]]
@@ -152,9 +159,8 @@
 
 (define imp-call
   F Args Return-reg C Acc ->
-  (let Acc (push-stack _ C Acc)
-       Acc [[klvm-nregs-> [(+ (length Args) 1)]] | Acc]
-       Acc [[klvm-reg-> [0] (+ (impcontext-label C) 1)] | Acc]
+  (let Acc [[klvm-nregs-> [(+ (length Args) 1)]] | Acc]
+       Acc [[klvm-reg-> [0] (+ (context-label C) 1)] | Acc]
        Acc (imp-set-args [] 0 Args C Acc)
        X (if (cons? F)
              (imp-expr3 F C)
@@ -162,16 +168,15 @@
        Acc (imp-call-func X (length Args) false C Acc)
        Acc (label (next-label C) C Acc)
     (imp-use-call-ret Return-reg C Acc))
-  where (and (symbol? F) (= (impcontext-bind-funcs C) all))
+  where (and (symbol? F) (= (context-bind-funcs C) all))
 
   F Args Return-reg C Acc ->
-  (let Acc (push-stack _ C Acc)
-       X (imp-expr3 F C)
+  (let X (imp-expr3 F C)
        Acc (prepend [[klvm-closure-> X]
                      [klvm-nregs-> [(+ (length Args) 1)
                                     [klvm-closure-nargs]]]
                      [klvm-put-closure-args]
-                     [klvm-reg-> [0] (+ (impcontext-label C) 1)]]
+                     [klvm-reg-> [0] (+ (context-label C) 1)]]
                     Acc)
        Acc (imp-set-args [[klvm-closure-nargs]] 0 Args C Acc)
        Acc (imp-call-func [klvm-closure-func] (length Args) false C Acc)
@@ -189,7 +194,7 @@
                               [klvm-inc-nargs N]
                               [klvm-call F]]
                              Acc))
-                  where (and (symbol? F) (= (impcontext-bind-funcs C) all))
+                  where (and (symbol? F) (= (context-bind-funcs C) all))
   F Args C Acc -> (let N (length Args)
                        Acc (push-stack _ C Acc)
                        X (imp-expr3 F C)
@@ -244,12 +249,12 @@
   (let Ninit (length Init)
        Nargs (+ Ninit (length Args))
        F (gensym klvm-lambda)
-       TL (impcontext-toplevel C)
+       TL (context-toplevel C)
        A (closure-args (protect A) 0 Nargs [])
        TL (imp-toplevel-expr [shen-closure F A Nregs Code]
-                                (impcontext-native-hook C)
+                                (context-native-hook C)
                                 TL)
-       _ (impcontext-toplevel-> C TL)
+       _ (context-toplevel-> C TL)
        Acc (closure-init Init C Acc)
        X [klvm-reg-> [Tgt-reg] [klvm-mk-closure F Nargs Ninit]]
        Acc [X | Acc]
@@ -277,15 +282,16 @@
     [[klvm-stack-> (+ Tgt-reg 1) [klvm-reg Tgt-reg]] | Acc]))
 
 (define imp-expr3''
-  [type X Type] C -> [type (imp-expr3 X C) Type]
-  [shen-get-reg R] C -> [klvm-reg (+ (impcontext-nargs C) R 1)]
-  [shen-get-arg R] C -> [klvm-reg (+ R 1)]
+  [type X Type] C -> (do (warn "`type` expression is not supported yet")
+                         (imp-expr3 X C))
+  [shen-get-reg R] C -> [klvm-reg (+ (context-nargs C) R)]
+  [shen-get-arg R] C -> [klvm-reg R]
   X _ -> (fail) where (cons? X)
   X _ -> X)
 
 (define imp-expr3'
   X C <- (imp-expr3'' X C)
-  X C <- ((impcontext-native-hook C) (/. X (imp-expr3'' X C)) X)
+  X C <- ((context-native-hook C) (/. X (imp-expr3'' X C)) X)
          where (cons? X)
   _ _ -> (fail))
 
@@ -349,7 +355,7 @@
        Acc (imp-if-expr Then Then-label After-label Tail? C Acc)
        Else-label (next-label C)
        Acc (imp-if-expr Else Else-label After-label Tail? C Acc)
-       R' (+ (impcontext-nargs C) R 1)
+       R' (+ (context-nargs C) R 1)
        Acc (label If-label C Acc)
        X [klvm-if [klvm-reg R'] [klvm-goto Then-label] [klvm-goto Else-label]]
        Acc [X | Acc]
@@ -361,10 +367,10 @@
 (define imp-expr1
   [do | X] Tail? C Acc -> (imp-do X Tail? C Acc)
   [if | X] Tail? C Acc -> (imp-if X Tail? C Acc)
-  [shen-get-reg R] true C Acc -> (let N (+ (impcontext-nargs C) R 1)
+  [shen-get-reg R] true C Acc -> (let N (+ (context-nargs C) R 1)
                                    (imp-return N C Acc))
   [shen-get-reg R] false C Acc -> Acc
-  [shen-set-reg! R Code] false C Acc -> (let N (+ (impcontext-nargs C) R 1)
+  [shen-set-reg! R Code] false C Acc -> (let N (+ (context-nargs C) R 1)
                                           (imp-expr2 Code N false C Acc))
   [shen-set-reg! R Code] true C Acc -> Acc
   [shen-get-arg R] true C Acc -> (imp-return (+ R 1) C Acc)
@@ -402,9 +408,9 @@
              [klvm-inc-stack-ptr [klvm-nargs]]]])
 
 (define imp-func-entry
-  C -> (let N (+ (impcontext-nargs C) (impcontext-nregs C) 2)
+  C -> (let N (+ (context-nargs C) (context-nregs C) 2)
             Acc (label (next-label C) C [])
-         (prepend [(imp-func-entry-template (impcontext-nargs C))
+         (prepend [(imp-func-entry-template (context-nargs C))
                    [klvm-nregs-> [N]]
                    [klvm-stack-size N]
                    [klvm-stack-> 0 [klvm-nargs]]]
@@ -415,15 +421,22 @@
   shen-closure -> klvm-closure
   shen-toplevel -> klvm-toplevel)
 
+(define func-name
+  shen-func Name -> Name
+  _ _ -> [])
+
 (define imp-toplevel-expr
   [Head Name Args Nregs Code] F Acc ->
-  (let C (mk-impcontext (length Args) Nregs -1 [] Acc [] none F)
+  (let Nargs (length Args)
+       Func-name (func-name Head Name)
+       C (mk-context Func-name (+ Nargs Nregs 2) Nargs Nregs -1 [] Acc []
+                     none F)
        X (imp-func-entry C)
        X (imp-expr1 Code true C X)
        X (close-label C X)
-       Acc (impcontext-toplevel C)
+       Acc (context-toplevel C)
        H (imp-func-hdr Head)
-    [[H Name Args Nregs (reverse (impcontext-func C))] | Acc])
+    [[H Name Args Nregs (reverse (context-func C))] | Acc])
   where (element? Head [shen-func shen-toplevel shen-closure])
   [X | Y] _ _ -> (error "Unexpected toplevel expression ~S." [X | Y])
   X _ Acc -> [X | Acc])
