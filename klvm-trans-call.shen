@@ -1,18 +1,20 @@
 (package klvm-trans [klvm-reg->
+                     klvm-reg
                      klvm-nregs->
+                     klvm-nargs
+                     klvm-nargs->
+                     klvm-inc-nargs
+                     klvm-inc-stack-ptr
+                     klvm-dec-stack-ptr
+                     klvm-wipe-stack
                      klvm-call
+                     klvm-closure->
+                     klvm-closure-func
+                     klvm-closure-nargs
+                     klvm-put-closure-args
+                     klvm-next
+                     klvm-next->
                      ]
-
-\\
-\\ Optimization for passing arguments to tailcalled function
-\\
-
-(define place-constants
-  [] _ Args Acc -> (@p Acc (reverse Args))
-  [[C] | Xs] I Args Acc -> (let Acc [[I | [C]] | Acc]
-                                Args [[] | Args]
-                             (place-constants Xs (+ I 1) Args Acc))
-  [X | Xs] I Args Acc -> (place-constants Xs (+ I 1) [X | Args] Acc))
 
 (define place-free-args
   [] _ _ Args Acc -> (@p Acc (reverse Args))
@@ -48,23 +50,22 @@
   [[I | _] | Ps] N -> (nplaces Ps I))
 
 (define place-args
-  Nregs Args -> (let X (place-constants Args 1 [] [])
-                     X (place-free-args (snd X) 1 (snd X) [] (fst X))
-                     X (place-args' (snd X) 1 [[[] | Nregs]] (fst X))
+  Nregs Args -> (let X (place-free-args Args 0 Args [] [])
+                     X (place-args' (snd X) 0 [[[] | Nregs]] (fst X))
                      X (place-extra (snd X) (fst X))
                   (@p X (nplaces X 0))))
 
 (define set-tailcall-args'
   [] Acc -> Acc
   [[D | D] | Ps] Acc -> (set-tailcall-args' Ps Acc)
-  [[D | [C]] | Ps] Acc -> (let Acc [[klvm-reg-> [D] C] | Acc]
+  [[D | [C]] | Ps] Acc -> (let Acc [[klvm-reg-> D C] | Acc]
                             (set-tailcall-args' Ps Acc))
-  [[D | S] | Ps] Acc -> (let Acc [[klvm-reg-> [D] [klvm-reg S]] | Acc]
+  [[D | S] | Ps] Acc -> (let Acc [[klvm-reg-> D [klvm-reg S]] | Acc]
                           (set-tailcall-args' Ps Acc)))
 
 (define set-tailcall-args
   Nregs Args Acc -> (let P (place-args Nregs Args)
-                         Acc [[klvm-nregs-> [(snd P)]] | Acc]
+                         Acc [[klvm-nregs-> [(+ (snd P) 1)]] | Acc]
                       (@p (set-tailcall-args' (fst P) Acc) (snd P))))
 
 (define reg-from-arg
@@ -79,70 +80,91 @@
 (define emit-tailcall-args
   Args C Nargs+ Acc ->
   (let R (regs-from-args Args [])
-       X (set-tailcall-args (context-nregs C) R Acc)
        Nargs (length Args)
-       Nargs-reg (+ (context-nargs C) (context-nregs C) 2)
-       Acc [[klvm-nregs-> [Nargs | Nargs+]] | (fst X)]
+       Nargs-reg (func-nargs-reg C)
        Acc [[klvm-nargs-> Nargs] | Acc]
        Acc [[klvm-inc-nargs [klvm-reg Nargs-reg]] | Acc]
+       X (set-tailcall-args (context-nregs C) R Acc)
+       Acc [[klvm-nregs-> [Nargs | Nargs+]] | (fst X)]
     (@p Acc (snd X))))
 
 (define emit-tailcall
-  F Args C Acc -> (let X (emit-tailcall-args Args C [] Acc)
-                       S (context-stack-size C)
-                       Acc [[klvm-dec-stack-ptr [klvm-reg S]] | (fst X)]
+  F Args C Acc -> (let R (func-nargs-reg C)
+                       X (emit-tailcall-args Args C [] Acc)
+                       Acc [[klvm-inc-stack-ptr 2] | (fst X)]
+                       Acc [[klvm-dec-stack-ptr [klvm-nargs]] | Acc]
                     [[klvm-call F] | Acc])
                   where (or (and (symbol? F) (= (context-bind-funcs C) all))
-                            (= F (context-func-name C)))
-  F Args C Acc -> (let Acc [[klvm-closure-> (imp-expr3 F C)] | Acc]
+                            (and (= F (context-func-name C))
+                                 (= (context-bind-funcs C) self)))
+  F Args C Acc -> (let Acc [[klvm-closure-> (emit-expr3 F C)] | Acc]
                        N [klvm-closure-nargs]
-                       X (emit-tailcall-args Args [N] C Acc)
-                       Acc [[klvm-put-closure-args (snd Acc)] | (fst Acc)]
-                       X (context-stack-size C)
-                       Acc [[klvm-dec-stack-ptr [klvm-reg X]] | Acc]
+                       X (emit-tailcall-args Args C [N] Acc)
+                       Acc [[klvm-put-closure-args (snd X)] | (fst X)]
+                       Acc [[klvm-inc-stack-ptr 2] | Acc]
+                       Acc [[klvm-dec-stack-ptr [klvm-nargs]] | Acc]
                     [[klvm-call [klvm-closure-func]] | Acc]))
 
 (define set-call-args 
   [] _ Acc -> Acc
-  [A | As] I Acc -> (set-call-args As (+ I 1) [[klvm-reg-> [I] A] | Acc]))
+  [A | As] I Acc -> (let X [klvm-reg A]
+                      (set-call-args As (+ I 1) [[klvm-reg-> I X] | Acc]))
+                    where (number? A)
+  [[A] | As] I Acc -> (set-call-args As (+ I 1) [[klvm-reg-> I A] | Acc])
+  [X | As] _ _ -> (error "Unexpected arg expr: ~S~%" X))
 
 (define emit-call-args
   Args Nargs+ C Acc ->
   (let R (regs-from-args Args [])
        Nargs (length R)
+       Acc [[klvm-next-> (+ (context-label C) 1)] | Acc]
        Acc [[klvm-nregs-> [(+ (context-stack-size C) Nargs) | Nargs+]] | Acc]
        Acc [[klvm-nargs-> Nargs] | Acc]
-       X (set-call-args R 1 Acc)
+       Acc (set-call-args R (context-stack-size C) Acc)
     Acc))
 
 (define emit-call
-  F Args Return-reg C Acc -> (let Acc (emit-call-args Args [] C Acc)
-                                  Nargs (length Args)
+  F Args Return-reg C Acc -> (let Nargs (length Args)
                                   Stacksize (context-stack-size C)
+                                  Acc (emit-call-args Args [] C Acc)
                                   Acc [[klvm-inc-stack-ptr Stacksize] | Acc]
                                   Acc [[klvm-call F] | Acc]
                                   Acc (label (next-label C) C Acc)
                                (emit-receive Return-reg C Acc))
-                             where (and (symbol? F)
-                                        (= (context-bind-funcs C) all))
+                             where (and (symbol? F) (= (context-bind-funcs C)
+                                                       all))
   F Args Return-reg C Acc -> (let N [klvm-closure-nargs]
                                   Nargs (length Args)
                                   Stacksize (context-stack-size C)
-                                  Acc (emit-call-args Args [[N]] C Acc)
+                                  Acc (emit-call-args Args [N] C Acc)
                                   Acc [[klvm-closure-> F] | Acc]
                                   Acc [[klvm-put-closure-args Stacksize]
                                        | Acc]
                                   Acc [[klvm-inc-stack-ptr Stacksize] | Acc]
+                                  Acc [[klvm-call [klvm-closure-func]] | Acc]
                                   Acc (label (next-label C) C Acc)
                                (emit-receive Return-reg C Acc)))
 
 (define emit-receive
-  [] C Acc -> [[klvm-dec-stack-ptr (context-stack-size C)] | Acc]
-  Return-reg C Acc -> (let Acc [[klvm-reg-> [Return-reg] ]]
-                           Acc [[klvm-dec-stack-ptr (context-stack-size C)]
+  [] C Acc -> (let S (context-stack-size C)
+                   Acc [[klvm-dec-stack-ptr S] | Acc]
+                [[klvm-wipe-stack S (+ S 1)] | Acc])
+  Return-reg C Acc -> (let S (context-stack-size C)
+                           Acc [[klvm-dec-stack-ptr S] | Acc]
+                           From (+ S 1)
+                           Acc [[klvm-reg-> Return-reg [klvm-reg (+ S 1)]]
                                 | Acc]
+                           Acc [[klvm-wipe-stack S (+ S 1)] | Acc]
+                        Acc))
 
 (define test-emit-tailcall
-  F Args Nregs -> (let C (mk-context 3 5 0 [] [] [] _ _)
-                    (emit-tailcall F Args C [])))
+  F Args -> (let C (mk-context two 3 1 0 0 [] [] [] _ _)
+              (emit-tailcall F Args C [])))
+
 )
+
+(define klvm-trans.test-emit-tailcall-1
+  -> (let X (klvm-trans.test-emit-tailcall one [[klvm-reg 0] x])
+          - (nl)
+       (klvm-trans.show-code (reverse X))))
+
