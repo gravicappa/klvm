@@ -6,6 +6,7 @@
                      klvm-runtime
                      klvm-trap-error
                      klvm-call-error-handler
+                     klvm-lambda
 
                      klvm-call
                      klvm-closure->
@@ -15,6 +16,7 @@
                      klvm-dec-nargs
                      klvm-error-unwind-get-handler
                      klvm-func-obj
+                     klvm-func-ptr
                      klvm-goto
                      klvm-if
                      klvm-inc-nargs
@@ -102,12 +104,12 @@ Y Y X X | R _ _ _ _
            [klvm-nregs-> [[klvm-nargs] [klvm-closure-nargs]]]
            [klvm-next-> [klvm-reg (func-next-reg C)]]
            [klvm-put-closure-args 0]
-           [klvm-wipe-stack 0 (context-stack-size C)]
+           [klvm-wipe-stack 0]
            [klvm-dec-stack-ptr [klvm-nargs]]
            [klvm-call [klvm-closure-func]]]
           [[klvm-reg-> 0 X]
            [klvm-next-> [klvm-reg (func-next-reg C)]]
-           [klvm-wipe-stack 1 (context-stack-size C)]
+           [klvm-wipe-stack 1]
            [klvm-return [klvm-next]]]])
 
 (define emit-return-val
@@ -121,8 +123,11 @@ Y Y X X | R _ _ _ _
   S N N Acc -> (reverse Acc)
   S I N Acc -> (closure-args S (+ I 1) N [(concat S I) | Acc]))
 
-(define closure'
-  Args Nregs Init Code C Acc ->
+(define prep-args
+  Args C -> (map (/. X (emit-expr3 X C)) Args))
+
+(define closure
+  Tgt-reg Args Nregs Init Code C Acc ->
   (let Ninit (length Init)
        Nargs (+ Ninit (length Args))
        F (gensym klvm-lambda)
@@ -132,15 +137,11 @@ Y Y X X | R _ _ _ _
                               (context-native-hook C)
                               TL)
        _ (context-toplevel-> C TL)
+       Init' [[klvm-func-ptr F] | (prep-args Init C)]
+       Acc (if (= Tgt-reg [])
+               (emit-tailcall klvm-mk-closure Init' C Acc)
+               (emit-call klvm-mk-closure Init' Tgt-reg C Acc))
     Acc))
-
-(define closure
-  [] Args Nregs Init Code C Acc ->
-  (let Acc (closure' Args Nregs Init Code C Acc)
-    (emit-tailcall klvm-mk-closure (prep-args Init C) C Acc))
-  Tgt-reg Args Nregs Init Code C Acc ->
-  (let Acc (closure' Args Nregs Init Code C Acc)
-    (emit-call klvm-mk-closure (prep-args Init C) Tgt-reg C Acc)))
 
 (define emit-freeze
   Tgt-reg Nregs Init Code C Acc -> (closure Tgt-reg [] Nregs Init Code C Acc))
@@ -172,9 +173,6 @@ Y Y X X | R _ _ _ _
 (define emit-expr2'
   X Return-reg Tail? C Acc -> (let X' (emit-expr3' X C)
                                 (emit-expr2'' X' Return-reg Tail? C Acc)))
-
-(define prep-args
-  Args C -> (map (/. X (emit-expr3 X C)) Args))
 
 (define emit-expr2
   [shen-closure Args Nregs Init Code] [] true C Acc ->
@@ -267,6 +265,7 @@ Y Y X X | R _ _ _ _
   Nargs -> [klvm-nargs-cond
             [[klvm-nregs-> [1]]
              [klvm-reg-> 0 [klvm-func-obj]]
+             [klvm-wipe-stack 1]
              [klvm-return [klvm-next]]]
             [[klvm-dec-nargs Nargs]]
             [[klvm-inc-stack-ptr [klvm-nargs]]
