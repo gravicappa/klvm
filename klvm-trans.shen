@@ -2,7 +2,8 @@
                      reg-kl.walk
                      shen-get-arg shen-get-reg shen-set-reg! shen-closure
                      shen-func shen-toplevel shen-freeze
-                     klvm-template-func-body
+                     klvm-func-entry-tpl
+                     klvm-func-return-tpl
                      klvm-runtime
                      klvm-trap-error
                      klvm-call-error-handler
@@ -98,23 +99,37 @@ Y Y X X | R _ _ _ _
 
 *\
 
-(define emit-return-template
-  X C -> [klvm-if-nargs>0
-          [[klvm-closure-> X]
-           [klvm-nregs-> [[klvm-nargs] [klvm-closure-nargs]]]
-           [klvm-next-> [klvm-reg (func-next-reg C)]]
-           [klvm-put-closure-args 0]
-           [klvm-wipe-stack 0]
-           [klvm-dec-stack-ptr [klvm-nargs]]
-           [klvm-call [klvm-closure-func]]]
-          [[klvm-reg-> 0 X]
-           [klvm-next-> [klvm-reg (func-next-reg C)]]
-           [klvm-wipe-stack 1]
-           [klvm-return [klvm-next]]]])
+(define klvm-func-entry-tpl
+  Name Nargs -> [klvm-nargs-cond
+                 Nargs
+                 [[klvm-nregs-> [1]]
+                  [klvm-reg-> 0 [klvm-func-obj Name Nargs]]
+                  [klvm-wipe-stack 1]
+                  [klvm-return [klvm-next]]]
+                 [[klvm-dec-nargs Nargs]]
+                 [[klvm-inc-stack-ptr [klvm-nargs]]
+                  [klvm-dec-stack-ptr Nargs]
+                  [klvm-dec-nargs Nargs]]])
+
+(define klvm-func-return-tpl
+  X Next -> [klvm-if-nargs>0
+             X
+             Next
+             [[klvm-closure-> X]
+              [klvm-nregs-> [[klvm-nargs] [klvm-closure-nargs]]]
+              [klvm-next-> Next]
+              [klvm-wipe-stack 0]
+              [klvm-put-closure-args 0]
+              [klvm-dec-stack-ptr [klvm-nargs]]
+              [klvm-call [klvm-closure-func]]]
+             [[klvm-reg-> 0 X]
+              [klvm-next-> Next]
+              [klvm-wipe-stack 1]
+              [klvm-return [klvm-next]]]])
 
 (define emit-return-val
-  X C Acc -> (let Acc' [[klvm-nargs-> [klvm-reg (func-nargs-reg C)]] | Acc]
-               [(emit-return-template X C) | Acc']))
+  X C Acc -> (let Acc [[klvm-nargs-> [klvm-reg (func-nargs-reg C)]] | Acc]
+               [(klvm-func-return-tpl X [klvm-reg (func-next-reg C)]) | Acc]))
 
 (define emit-return
   Target-reg C Acc -> (emit-return-val [klvm-reg Target-reg] C Acc))
@@ -261,21 +276,11 @@ Y Y X X | R _ _ _ _
   X false _ Acc -> Acc
   X true C Acc -> (emit-return-val (emit-expr3 X C) C Acc))
 
-(define emit-func-entry-template
-  Nargs -> [klvm-nargs-cond
-            [[klvm-nregs-> [1]]
-             [klvm-reg-> 0 [klvm-func-obj]]
-             [klvm-wipe-stack 1]
-             [klvm-return [klvm-next]]]
-            [[klvm-dec-nargs Nargs]]
-            [[klvm-inc-stack-ptr [klvm-nargs]]
-             [klvm-dec-stack-ptr Nargs]
-             [klvm-dec-nargs Nargs]]])
-
 (define emit-func-entry
   C -> (let N (context-stack-size C)
             Acc (label (next-label C) C [])
-         (prepend [(emit-func-entry-template (context-nargs C))
+         (prepend [(klvm-func-entry-tpl (context-func-name C)
+                                        (context-nargs C))
                    [klvm-nregs-> [N]]
                    [klvm-reg-> (- N 2) [klvm-nargs]]
                    [klvm-reg-> (- N 1) [klvm-next]]]
@@ -286,16 +291,10 @@ Y Y X X | R _ _ _ _
   shen-closure -> klvm-closure
   shen-toplevel -> klvm-toplevel)
 
-(define func-name
-  shen-func Name -> Name
-  _ _ -> [])
-
 (define emit-toplevel-expr
   [Head Name Args Nregs Code] F Acc ->
   (let Nargs (length Args)
-       Func-name (func-name Head Name)
-       C (mk-context Func-name (+ Nargs Nregs 2) Nargs Nregs -1 [] Acc []
-                     none F)
+       C (mk-context Name (+ Nargs Nregs 2) Nargs Nregs -1 [] Acc [] none F)
        X (emit-func-entry C)
        X (emit-expr1 Code true C X)
        X (close-label C X)
@@ -316,13 +315,6 @@ Y Y X X | R _ _ _ _
 (define klvm-from-kl
   F X -> (let X' (reg-kl.walk (map (function deinline-expr.deinline) X) false)
            (emit-toplevel X' F [])))
-
-(define klvm-template-func-body
-  Nargs-sym Func-sym -> (let C (mk-context Func-sym (+ 0 2) Nargs-sym
-                                           0 -1 [] [] [] none null-fn)
-                             X [(emit-func-entry-template Nargs-sym)
-                                (emit-return-template [Func-sym] C)]
-                          [[[klvm-label 0] | X]]))
 
 (define klvm-runtime
   -> (let X (intern "X")

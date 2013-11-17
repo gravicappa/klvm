@@ -6,8 +6,26 @@ exclude="
   klvm-call-error-handler
   klvm-from-kl
   klvm-thaw
+  klvm-mk-closure
 "
-expr="$(echo $exclude | sed 's/ /\\|/g')"
 dir="$(dirname "$0")"
-grep -o 'klvm-[a-z0-9<>-]*' <"$dir"/klvm-trans.shen \
-| grep -v "$expr" | sort -u
+cat "$dir"/klvm-trans*.shen \
+| awk -v e="$exclude" '
+BEGIN {
+  FS = "[ ()\\[\\]]"
+  split(e, ea, /[ \n\r\t]/)
+  for (x in ea)
+    if (ea[x] != "")
+      exclude[ea[x]] = 1
+}
+/^\(package/ {inpackage = 1; next}
+/^[a-zA-Z()]/ {inpackage = 0}
+!inpackage {
+  for (i = 1; i <= NF; ++i)
+    if ($i != "" && $i ~ /^klvm-/ && !($i ~ /\./) && !($i in exclude))
+      op[$i] = 1
+}
+END {
+  for (x in op)
+    print(x)
+}'

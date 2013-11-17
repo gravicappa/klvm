@@ -1,3 +1,5 @@
+** Documentation is outdated **
+
 # KLVM Description
 
 VM uses
@@ -432,3 +434,13 @@ level 1 operations.
       [if [klvm-reg 3]
           [klvm-goto 4]
           [klvm-goto 7]]]]
+
+............
+
+
+reg-> S+0 a1
+reg-> S+1 a0
+put-closure-args 2
+nargs-> 2
+nargs+ [closure-nargs]
+next-> [reg S-1]

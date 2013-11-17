@@ -6,6 +6,8 @@
                      klvm-inc-nargs
                      klvm-inc-stack-ptr
                      klvm-dec-stack-ptr
+                     klvm-save-stack-ptr
+                     klvm-restore-stack-ptr
                      klvm-wipe-stack
                      klvm-call
                      klvm-closure->
@@ -49,6 +51,10 @@
   [[I | _] | Ps] N -> (nplaces Ps N) where (> N I)
   [[I | _] | Ps] N -> (nplaces Ps I))
 
+(define max
+  X Y -> X where (> X Y)
+  _ Y -> Y)
+
 (define place-args
   Nregs Args -> (let X (place-free-args Args 0 Args [] [])
                      X (place-args' (snd X) 0 [[[] | Nregs]] (fst X))
@@ -87,18 +93,21 @@
   (let R (regs-from-args Args [])
        Nargs (length Args)
        Nargs-reg (func-nargs-reg C)
+       Acc [[klvm-nargs-> [klvm-reg (func-nargs-reg C)]] | Acc]
+       Acc [[klvm-dec-stack-ptr [klvm-nargs]] | Acc]
+       Acc [[klvm-save-stack-ptr] | Acc]
+       Acc [[klvm-inc-stack-ptr [klvm-nargs]] | Acc]
        Acc [[klvm-next-> [klvm-reg (func-next-reg C)]] | Acc]
        Acc [[klvm-nargs-> Nargs] | Acc]
        Acc [[klvm-inc-nargs [klvm-reg Nargs-reg]] | Acc]
-       X (set-tailcall-args (context-nregs C) R Acc)
+       X (set-tailcall-args (context-stack-size C) R Acc)
        Acc [[klvm-nregs-> [Nargs | Nargs+]] | (fst X)]
     (@p Acc (snd X))))
 
 (define emit-tailcall
   F Args C Acc -> (let R (func-nargs-reg C)
                        X (emit-tailcall-args Args C [] Acc)
-                       Acc [[klvm-inc-stack-ptr 2] | (fst X)]
-                       Acc [[klvm-dec-stack-ptr [klvm-nargs]] | Acc]
+                       Acc [[klvm-restore-stack-ptr] | (fst X)]
                     [[klvm-call F] | Acc])
                   where (or (and (symbol? F) (= (context-bind-funcs C) all))
                             (and (= F (context-func-name C))
@@ -107,9 +116,8 @@
                        N [klvm-closure-nargs]
                        X (emit-tailcall-args Args C [N] Acc)
                        Acc [[klvm-put-closure-args (snd X)] | (fst X)]
-                       Acc [[klvm-inc-stack-ptr 2] | Acc]
                        Acc [[klvm-inc-nargs N] | Acc]
-                       Acc [[klvm-dec-stack-ptr [klvm-nargs]] | Acc]
+                       Acc [[klvm-restore-stack-ptr] | Acc]
                     [[klvm-call [klvm-closure-func]] | Acc]))
 
 (define set-call-args 
@@ -180,3 +188,9 @@
           X (klvm-trans.closure [] [] 3 [[shen-get-reg 2]] [] C [])
           - (nl)
        (klvm-trans.show-code (reverse X))))
+
+(define klvm-trans.test-call1
+  -> (let X (read-from-string "(define mapx Fn List -> (mapx' Fn List []))")
+          Kl (kl-from-shen X)
+          Klvm (klvm-from-kl klvm-trans.null-fn Kl)
+       (klvm-trans.show-code (reverse Klvm))))
