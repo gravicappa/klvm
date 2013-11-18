@@ -51,20 +51,11 @@
   [[I | _] | Ps] N -> (nplaces Ps N) where (> N I)
   [[I | _] | Ps] N -> (nplaces Ps I))
 
-(define max
-  X Y -> X where (> X Y)
-  _ Y -> Y)
-
 (define place-args
   Nregs Args -> (let X (place-free-args Args 0 Args [] [])
                      X (place-args' (snd X) 0 [[[] | Nregs]] (fst X))
                      X (place-extra (snd X) (fst X))
                   (@p X (nplaces X 0))))
-
-(define max-reg-id
-  [] M -> M
-  [[D | X] | Ps] M -> (max-reg-id Ps D) where (> D M)
-  [[D | X] | Ps] M -> (max-reg-id Ps M))
 
 (define set-tailcall-args'
   [] Acc -> Acc
