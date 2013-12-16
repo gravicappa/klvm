@@ -28,8 +28,9 @@
                                (place-free-args Xs (+ I 1) Map Args Acc)))
 
 (define mk-place
-  [] I -> I
-  [[_ | I] | Xs] _ -> (mk-place Xs (+ I 1)))
+  [] M -> (+ M 1)
+  [[_ | I] | Xs] M -> (mk-place Xs M) where (> M I)
+  [[_ | I] | Xs] M -> (mk-place Xs I))
 
 (define place-args'
   [] _ Map Acc -> (@p Acc Map)
@@ -162,12 +163,21 @@
                            Acc [[klvm-reg-> Return-reg [klvm-reg S]] | Acc]
                            Acc [[klvm-wipe-stack S] | Acc]
                         Acc))
-
-(define test-emit-tailcall
-  F Args -> (let C (mk-context two 3 1 0 0 [] [] [] _ _)
-              (emit-tailcall F Args C [])))
-
 )
+
+(define klvm-trans.test-emit-tailcall
+  F Args -> (let C (klvm-trans.mk-context two 3 1 0 0 [] [] [] _ _)
+              (klvm-trans.emit-tailcall F Args C [])))
+
+(define klvm-trans.test-tailcall-1
+  -> (let X (read-from-string "
+              (define func1
+                A1 A2 A3 A4 A5 -> (let X1 one
+                                    (func2 A1 A2 X1 A3 A4 A5 [])))
+              ")
+          Kl (kl-from-shen X)
+          Klvm (klvm-from-kl klvm-trans.null-fn Kl)
+       (klvm-trans.show-code (reverse Klvm))))
 
 (define klvm-trans.test-emit-tailcall-1
   -> (let X (klvm-trans.test-emit-tailcall one [[klvm-reg 0] x])
