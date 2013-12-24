@@ -262,7 +262,7 @@ Y Y X X | R _ _ _ _
   [shen-closure Args Nregs Init Code] false _ Acc -> Acc
 
   [shen-freeze Nregs Init Code] true C Acc ->
-  (emit-freeze Nregs Init Code C Acc)
+  (emit-freeze [] Nregs Init Code C Acc)
 
   [shen-freeze Nregs Init Code] false _ Acc -> Acc
 

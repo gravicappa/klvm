@@ -107,7 +107,7 @@
   F Args C Acc -> (let Acc [[klvm-closure-> (emit-expr3 F C)] | Acc]
                        N [klvm-closure-nargs]
                        X (emit-tailcall-args Args C [N] Acc)
-                       Acc [[klvm-put-closure-args (snd X)] | (fst X)]
+                       Acc [[klvm-put-closure-args 0] | (fst X)]
                        Acc [[klvm-inc-nargs N] | Acc]
                        Acc [[klvm-restore-stack-ptr] | Acc]
                     [[klvm-call [klvm-closure-func]] | Acc]))
@@ -190,8 +190,14 @@
           - (nl)
        (klvm-trans.show-code (reverse X))))
 
-(define klvm-trans.test-call1
-  -> (let X (read-from-string "(define mapx Fn List -> (mapx' Fn List []))")
-          Kl (kl-from-shen X)
-          Klvm (klvm-from-kl klvm-trans.null-fn Kl)
-       (klvm-trans.show-code (reverse Klvm))))
+(define klvm-trans.test-code
+  Str -> (let X (read-from-string Str)
+              Kl (kl-from-shen X)
+              Klvm (klvm-from-kl klvm-trans.null-fn Kl)
+           (klvm-trans.show-code (reverse Klvm))))
+
+(define klvm-trans.test-call-1
+  -> (klvm-trans.test-code "(define mapx Fn List -> (mapx' Fn List []))"))
+
+(define klvm-trans.test-call-2
+  -> (klvm-trans.test-code "(define incr-list X -> (map (+ 1) X))"))
