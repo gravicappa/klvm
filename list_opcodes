@@ -6,7 +6,10 @@ exclude="
   klvm-call-error-handler
   klvm-from-kl
   klvm-thaw
+  klvm-dump
   klvm-mk-closure
+  klvm-func-entry-tpl
+  klvm-func-return-tpl
 "
 dir="$(dirname "$0")"
 cat "$dir"/klvm-trans*.shen \

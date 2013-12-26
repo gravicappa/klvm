@@ -13,9 +13,7 @@
                      klvm-closure->
                      klvm-closure-func
                      klvm-closure-nargs
-                     klvm-current-error
                      klvm-dec-nargs
-                     klvm-error-unwind-get-handler
                      klvm-func-obj
                      klvm-func-ptr
                      klvm-goto
@@ -202,12 +200,6 @@ Y Y X X | R _ _ _ _
   [shen-freeze Nregs Init Code] [] true C Acc ->
   (emit-freeze [] Nregs Init Code C Acc)
   
-  [klvm-current-error] Return-reg _ C Acc ->
-  [[klvm-reg-> Return-reg [klvm-current-error]] | Acc]
-  
-  [klvm-error-unwind-get-handler] Return-reg _ C Acc ->
-  [[klvm-reg-> Return-reg [klvm-error-unwind-get-handler]] | Acc]
-  
   X Return-reg Tail? C Acc <- (emit-expr2' X Return-reg Tail? C Acc)
   [F | Args] _ true C Acc -> (emit-tailcall F (prep-args Args C) C Acc)
   [F | Args] Return-reg false C Acc -> (let Args' (prep-args Args C)
@@ -327,12 +319,7 @@ Y Y X X | R _ _ _ _
                [do [klvm-pop-error-handler]
                    R]]]]
 
-       [defun klvm-call-error-handler []
-         [let E [klvm-error-unwind-get-handler]
-           [E [klvm-current-error]]]]
-
-       [defun klvm-thaw [X]
-         [X]]
+       [defun klvm-thaw [X] [X]]
        ]))
 
 (define klvm-dump
