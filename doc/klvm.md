@@ -10,6 +10,9 @@ VM consists of
   - special register for storing sp `savesp`,
   - stack of error handlers.
 
+Logically registers `t` and `savesp` are local to label they are used in. So
+they can be implemented as local variables.
+
 ## Calling a function
 
 Parameters passed to function are put in `reg` **IN REVERSE** order. The
@@ -18,54 +21,56 @@ where VM jumps after calling function.
 
 ## Structure of KLVM code
 
-  [toplevel-expression
-   [[klvm-label 0]
-    [level-1-expression
-     [level-2-expression ...]
+    [toplevel-expression
+     [[klvm-label 0]
+      [level-1-expression
+       [level-2-expression ...]
+       ...]
+      [level-1-expression
+       [level-2-expression ...]
+       ...]
+      [level-1-expression ...]]
+     [[klvm-label N]
+      [level-1-expression ...]
+      [level-1-expression ...]]
      ...]
-    [level-1-expression
-     [level-2-expression ...]
-     ...]
-    [level-1-expression ...]]
-   [[klvm-label N]
-    [level-1-expression ...]
-    [level-1-expression ...]]
-   ...]
 
-klvm-func
-klvm-closure
-klvm-toplevel
-klvm-return
-klvm-goto
-klvm-call
-klvm-nargs->
-klvm-nargs
-klvm-inc-nargs
-klvm-dec-nargs
-klvm-nargs-cond
-klvm-if-nargs>0
-klvm-closure->
-klvm-closure-func
-klvm-closure-nargs
-klvm-put-closure-args
-klvm-wipe-stack
-klvm-restore-stack-ptr
-klvm-dec-stack-ptr
-klvm-nregs->
-klvm-current-error
-klvm-label
-klvm-if
-klvm-inc-stack-ptr
-klvm-save-stack-ptr
-klvm-next->
-klvm-next
-klvm-reg->
-klvm-reg
-klvm-error-unwind-get-handler
-klvm-pop-error-handler
-klvm-push-error-handler
-klvm-func-ptr
-klvm-func-obj
+Operators:
+
+- klvm-func
+- klvm-closure
+- klvm-toplevel
+- klvm-return
+- klvm-goto
+- klvm-call
+- klvm-nargs->
+- klvm-nargs
+- klvm-inc-nargs
+- klvm-dec-nargs
+- klvm-nargs-cond
+- klvm-if-nargs>0
+- klvm-closure->
+- klvm-closure-func
+- klvm-closure-nargs
+- klvm-put-closure-args
+- klvm-wipe-stack
+- klvm-restore-stack-ptr
+- klvm-dec-stack-ptr
+- klvm-nregs->
+- klvm-current-error
+- klvm-label
+- klvm-if
+- klvm-inc-stack-ptr
+- klvm-save-stack-ptr
+- klvm-next->
+- klvm-next
+- klvm-reg->
+- klvm-reg
+- klvm-error-unwind-get-handler
+- klvm-pop-error-handler
+- klvm-push-error-handler
+- klvm-func-ptr
+- klvm-func-obj
 
 ### toplevel operations
 
@@ -118,9 +123,9 @@ toplevel.
 
 ### klvm-closure, klvm-func, klvm-toplevel
 
-  [klvm-closure Name Nargs Nregs Code]
-  [klvm-func Name Nargs Nregs Code]
-  [klvm-toplevel Name Nargs Nregs Code]
+    [klvm-closure Name Nargs Nregs Code]
+    [klvm-func Name Nargs Nregs Code]
+    [klvm-toplevel Name Nargs Nregs Code]
 
 Define a lambda, function or toplevel with name `Name`, number of parameters
 `Nargs`, number of used registers `Nregs` and code `Code`.
@@ -182,10 +187,7 @@ Decrease the value of `nargs` register by `Decrement`.
 
 ### klvm-nargs-cond
 
-    [klvm-nargs-cond Nargs
-                     A
-                     B
-                     C]
+    [klvm-nargs-cond Nargs A B C]
 
 If the value of `Nargs` KLVM expression is less than number of function's
 parameters execute KLVM expression `A`. If the value of `nargs` register is
@@ -196,10 +198,7 @@ translated from `klvm-func-entry-tpl` template.
 
 ### klvm-if-nargs>0
 
-    [klvm-if-nargs>0 X
-                     Next
-                     A
-                     B]
+    [klvm-if-nargs>0 X Next A B]
 
 If the value of `nargs` register > 0 execute KLVM expressions `A`, else
 execute `B`. Arguments `X` and `Next` are used if implementation chooses not
