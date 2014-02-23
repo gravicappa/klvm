@@ -194,11 +194,11 @@ Y Y X X | R _ _ _ _
   [shen-closure Args Nregs Init Code] Return-reg _ C Acc ->
   (closure Return-reg Args Nregs Init Code C Acc)
   
-  [shen-freeze Nregs Init Code] Return-reg _ C Acc ->
-  (emit-freeze Return-reg Nregs Init Code C Acc)
-  
   [shen-freeze Nregs Init Code] [] true C Acc ->
   (emit-freeze [] Nregs Init Code C Acc)
+  
+  [shen-freeze Nregs Init Code] Return-reg _ C Acc ->
+  (emit-freeze Return-reg Nregs Init Code C Acc)
   
   X Return-reg Tail? C Acc <- (emit-expr2' X Return-reg Tail? C Acc)
   [F | Args] _ true C Acc -> (emit-tailcall F (prep-args Args C) C Acc)
@@ -207,8 +207,7 @@ Y Y X X | R _ _ _ _
   X _ _ _ _ -> (error "Unexpected L2 expression ~S" X))
 
 (define emit-do
-  [X] true C Acc -> (emit-expr1 X true C Acc)
-  [X] false C Acc -> (emit-expr1 X false C Acc)
+  [X] Tail? C Acc -> (emit-expr1 X Tail? C Acc)
   [X | Rest] Tail? C Acc -> (let Acc' (emit-expr1 X false C Acc)
                               (emit-do Rest Tail? C Acc')))
 
@@ -244,7 +243,7 @@ Y Y X X | R _ _ _ _
   [shen-get-reg R] false C Acc -> Acc
   [shen-set-reg! R Code] false C Acc -> (let N (func-reg R C)
                                           (emit-expr2 Code N false C Acc))
-  [shen-set-reg! R Code] true C Acc -> Acc
+  [shen-set-reg! R Code] true C Acc -> (error "Unexpected (set-reg! ~S)" Code)
   [shen-get-arg R] true C Acc -> (emit-return (func-arg R C) C Acc)
   [shen-get-arg R] false C Acc -> Acc
 
@@ -306,6 +305,10 @@ Y Y X X | R _ _ _ _
 
 (define klvm-from-kl
   F X -> (let X' (reg-kl.walk (map (function deinline-expr.deinline) X) false)
+              F (if (or (= F []) (not F))
+                    null-fn
+                    F)
+              . (output "F: ~S~%" F)
            (emit-toplevel X' F [])))
 
 (define klvm-runtime

@@ -105,10 +105,10 @@
                             (and (= F (context-func-name C))
                                  (= (context-bind-funcs C) self)))
   F Args C Acc -> (let Acc [[klvm-closure-> (emit-expr3 F C)] | Acc]
-                       N [klvm-closure-nargs]
-                       X (emit-tailcall-args Args C [N] Acc)
+                       X (emit-tailcall-args Args C [[klvm-closure-nargs]]
+                                             Acc)
                        Acc [[klvm-put-closure-args 0] | (fst X)]
-                       Acc [[klvm-inc-nargs N] | Acc]
+                       Acc [[klvm-inc-nargs [klvm-closure-nargs]] | Acc]
                        Acc [[klvm-restore-stack-ptr] | Acc]
                     [[klvm-call [klvm-closure-func]] | Acc]))
 
