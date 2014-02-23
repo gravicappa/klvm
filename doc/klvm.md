@@ -163,9 +163,12 @@ Jump to label `X`.
 
 ### klvm-call
 
-    [klvm-call func]
+    [klvm-call Funcptr]
 
-Jump to function defined by level 2 expression `func`.
+Jump to function defined by level 2 expression `Funcptr` that returns function
+pointer. Often occures with `klvm-closure-func` expression. 
+
+    [klvm-call [klvm-closure-func]]
 
 ### klvm-nargs->
 
@@ -220,10 +223,12 @@ Puts closure variables to registers vector starting from index `Off`.
 
 ### klvm-nregs->
 
-    [klvm-nregs-> [A | B]]
+    [klvm-nregs-> [N]]
+    [klvm-nregs-> [N [klvm-closure-nargs]]]
 
-Ensure that the length of the registers vector if not less that
-`sp + [A | B]`. Otherwise either increase it or raise an error.
+Ensure that the length of the registers vector if not less that `sp + N` or
+`sp + N + [klvm-closure-nargs]`. Otherwise either increase it or raise an
+error.
 
 ### klvm-if
 
@@ -363,10 +368,10 @@ Scheme-like pseudocode:
 
 KLVM translates
 
-    [trap-error X [lambda E Y]] ->
+    [trap-error X [lambda E Y]]
 
 to
-    [klvm-trap-error [freeze X] [lambda E Y]] ->
+    [klvm-trap-error [freeze X] [lambda E Y]]
 
 Where `klvm-trap-error` definition is provided by `klvm-runtime` function.
 

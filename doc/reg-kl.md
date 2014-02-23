@@ -1,16 +1,17 @@
 # Overview
 
 reg-kl is a code translator that eliminates `let`, `lambda` constructions from
-KL. It is useful for translating KL into languages that don't have sane
-lambdas (Python, Java, C), closures (Java, C), have weird scope (js). Mind
-that KL-code it emits requires further processing.
+KLambda. It is useful for translating KLambda into languages that don't have
+sane lambdas (Python, Java, C), closures (Java, C), have weird scope (js).
+Mind that it emits Reg-KLambda dialect which is not compatible to KLambda and
+requires further processing.
 
 ## Example:
 
 This KL code
 
 
-    (reg-kl-walk [[defun one [X]
+    (reg-kl.walk [[defun one [X]
                     [let Y [func1 X a]
                       [let Z [func2 X Y]
                         [let W [func3 Y Z]
@@ -29,14 +30,16 @@ This KL code
             [[shen-get-reg 1]]
             [[shen-get-arg 2] [shen-get-arg 1] [shen-get-arg 0]]]]]]
 
-Each function or closure is represented as a procedure, required arguments and
-a vector with closure variables. For a function closure vector is empty. If a
-function are called with less number of arguments than required its vector
-closure contains given variables. Python pseudocode explains it better.
+Each function or closure is supposed to be represented as a vector containing
+procedure, required arguments and a vector with closure variables. For a
+mere function closure vector is empty. If a function are called with less
+number of arguments than required its vector closure contains given variables.
+Python pseudocode explains it better.
 
-    >>> def plus_fn(Args):
+    >>> def plus_fn(*Args):
             if len(Args) < 2: # if arguments are not enough
                 return [function_tag, plus_fn, 2, Args] # return closure
+            else:
                 return Args[0] + Args[1]
 
     >>> plus = [function_tag, plus_fn, 2, []]  # define function plus
@@ -51,14 +54,16 @@ closure contains given variables. Python pseudocode explains it better.
     >>> call(x, [2])                 # calling a closure with more var
     3
 
-    >>> def adder_lambda_fn(Args):   # lifted lambda
+    >>> def adder_lambda_fn(*Args):   # lifted lambda
             if len(Args) < 2:
                 return [function_tag, adder_lambda_fn, 2, Args]
+            else:
                 return Args[0] + Args[1]
 
-    >>> def adder_fn(Args):
+    >>> def adder_fn(*Args):
             if len(Args) < 1:
                 return [function_tag, adder_fn, 1, Args]
+            else:
                 return [function_tag, adder_lambda_fn, 2, [Args[0]]]
 
     >>> inc1 = call(adder_fn, [1])
@@ -78,7 +83,8 @@ closure contains given variables. Python pseudocode explains it better.
 
 ## [shen-mk-func Name Args Nregs Code]
 
-Is obvious.
+Defines function `Name` with argument list `Args`, number of registers `Nregs`
+and body `Code`.
 
 ## [shen-set-reg! Reg Value]
 
@@ -105,7 +111,7 @@ Opcode defining freeze with initializing list for argument registers and code.
 
 ## Translates `cond` into cascade of `if`:
 
-    (reg-kl-walk [[defun func [A]
+    (reg-kl.walk [[defun func [A]
                     [cond [[= A 1] one]
                           [[= A 2] two]
                           [true many]]]])
@@ -122,3 +128,4 @@ Opcode defining freeze with initializing list for argument registers and code.
                    [error "error: cond failure"]]]]]]
 
 ## Information about variables names is lost.
+## Does not support `type` form yet.
