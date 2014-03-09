@@ -13,8 +13,7 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>. *\
 
-(package reg-kl [shen-get-arg shen-get-reg shen-set-reg! shen-closure
-                 shen-func shen-toplevel shen-freeze]
+(package regkl [klvm.trap-error-fn]
 
 (defstruct context
   (toplevel s-expr)
@@ -75,13 +74,13 @@
 (define used-vars-cascade
   X Env Used -> (used-vars-cascade-aux (reverse X) Env Used []))
 
-(define mk-shen-set-reg
+(define mk-set-reg
   X _ -> (error "Cannot set function argument~%") where (< X 0)
-  X V -> [shen-set-reg! X V])
+  X V -> [set-reg! X V])
 
-(define mk-shen-get-reg
-  X -> [shen-get-arg (- (- 0 X) 1)] where (< X 0)
-  X -> [shen-get-reg X])
+(define mk-get-reg
+  X -> [get-arg (- (- 0 X) 1)] where (< X 0)
+  X -> [get-reg X])
 
 (define reuse-idx
   X [] -> (fail)
@@ -106,21 +105,21 @@
   _ Y -> Y)
 
 (define setreg-unexpr
-  I [X] Acc -> (reverse [(mk-shen-set-reg I X) | Acc])
+  I [X] Acc -> (reverse [(mk-set-reg I X) | Acc])
   I [X | Rest] Acc -> (setreg-unexpr I Rest [X | Acc])
-  I X Acc -> (mk-shen-set-reg I X))
+  I X Acc -> (mk-set-reg I X))
 
 (define setreg-do-expr
   _ [] _ -> (error "Broken `do` expression.")
-  I [X] Acc -> (reverse [(mk-shen-set-reg-unexpr I X) | Acc])
+  I [X] Acc -> (reverse [(mk-set-reg-unexpr I X) | Acc])
   I [X | Y] Acc -> (setreg-do-expr I Y [X | Acc]))
 
-(define mk-shen-set-reg-unexpr
+(define mk-set-reg-unexpr
   I [do | X] -> [do | (setreg-do-expr I X [])]
-  I [if If Then Else] -> (let Then' (mk-shen-set-reg-unexpr I Then)
-                              Else' (mk-shen-set-reg-unexpr I Else)
+  I [if If Then Else] -> (let Then' (mk-set-reg-unexpr I Then)
+                              Else' (mk-set-reg-unexpr I Else)
                            [if If Then' Else'])
-  I X -> (mk-shen-set-reg I X))
+  I X -> (mk-set-reg I X))
 
 (define walk-let-expr
   X V Env Used-in-body Used Unext C true
@@ -131,7 +130,7 @@
           _ (context-nregs-> C (max (+ I 1) (context-nregs C)))
           Env' (add-var X I Env)
           Expr (walk-expr V Env Used Unext' C)
-       (@p (mk-shen-set-reg-unexpr I Expr) Env'))
+       (@p (mk-set-reg-unexpr I Expr) Env'))
   _ V Env _ Used Unext C false -> (@p (walk-expr V Env Used Unext C) Env))
 
 (define walk-let
@@ -194,7 +193,7 @@
 
 (define mk-closure-args-init
   [] _ M -> (reverse M)
-  [U | Used] Env M -> (let Y (mk-shen-get-reg (var-idx U Env))
+  [U | Used] Env M -> (let Y (mk-get-reg (var-idx U Env))
                         (mk-closure-args-init Used Env [Y | M])))
 
 (define mk-closure-env
@@ -213,7 +212,7 @@
   X Body Args Env Used C -> (let Args (reverse [X | Args])
                                  A (append Used (reverse [X | Args]))
                                  X (mk-closure-list A Body Env Used C)
-                              [shen-closure Args (context-nregs C) | X]))
+                              [closure Args (context-nregs C) | X]))
 
 (define walk-lambda
   X Code Args Env C -> (let U (used-vars [lambda X Code] Env)
@@ -226,13 +225,17 @@
   Code Env Used C -> (let C' (mk-context (context-toplevel C) 0)
                           X (mk-closure-list Used Code Env Used C')
                           TL (context-toplevel-> C (context-toplevel C'))
-                       [shen-freeze (context-nregs C') | X]))
+                       [freeze (context-nregs C') | X]))
 
 (define lift-defun
   F Args Body C -> (let C' (mk-context (context-toplevel C) 0)
                         X (mk-defun-kl F Args Body [] C')
                         TL (context-toplevel-> C [X | (context-toplevel C')])
                      [function F]))
+
+(define walk-trap
+  X E Env Used Unext C -> (let X' [klvm.trap-error-fn [freeze X] E]
+                            (walk-expr X' Env Used Unext C)))
 
 (define walk-expr
   [let X V Body] Env Used Unext C -> (walk-let X V Body Env Used Unext C)
@@ -242,8 +245,9 @@
   [lambda X B] Env _ _ C -> (walk-lambda X B [] Env C)
   [freeze X] Env Used _ C -> (walk-freeze X Env Used C)
   [defun F Args Body] _ _ _ C -> (lift-defun F Args Body C)
+  [trap-error X E] Env Used Unext C -> (walk-trap X E Env Used Unext C)
   [X | A] Env Used Unext C -> (walk-apply [X | A] Env Used Unext C)
-  X Env _ _ _ -> (mk-shen-get-reg (var-idx X Env))
+  X Env _ _ _ -> (mk-get-reg (var-idx X Env))
                  where (and (var-defined? X Env) (symbol? X))
   X _ _ _ _ -> X)
 
@@ -258,8 +262,8 @@
                        (walk-expr Body Env U [] C)))
 
 (define defun-hdr
-  true -> shen-toplevel
-  false -> shen-func)
+  true -> toplevel
+  false -> func)
 
 (define mk-defun-kl
   F Args Body Env Toplevel? C ->

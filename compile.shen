@@ -34,12 +34,6 @@
 (define vector-from-list
   List -> (fill-vector 1 List (vector (length List))))
 
-(define number-bytes
-  X -> 1 where (< X 256)
-  X -> 2 where (< X 65536)
-  X -> 3 where (< X 16777216)
-  X -> 4 where (< X 4294967296))
-
 (define vector-index'
   I _ X V -> I where (= (<-vector V I) X)
   N N X V -> -1
@@ -154,8 +148,17 @@
 (define warn-type
   -> (warning "`type` expression is not supported yet"))
 
+(define reg-from-arg
+  [shen-get-reg R | _] C -> (func-reg R C)
+  [shen-get-arg R | _] C -> (func-arg R C)
+  X _ -> [X])
+
+(define regs-from-args
+  [] C Acc -> Acc
+  [X | Xs] C Acc -> (regs-from-args Xs C [(reg-from-arg X C) | Acc]))
+
 (define comp-call-args Args Nargs+ C Acc ->
-  (let R (regs-from-args Args [])
+  (let R (regs-from-args Args C [])
        Nargs (length R)
        Acc [[klvm-next-> (+ (context-label C) 1)] | Acc]
        Acc [[klvm-nregs-> [(+ (context-stack-size C) Nargs) | Nargs+]] | Acc]
@@ -163,8 +166,19 @@
        Acc (set-call-args R (context-stack-size C) Acc)
     Acc))
 
+(define set-call-args 
+  [] _ C -> C
+  [A | As] I C -> (let X [klvm-reg A]
+                      (set-call-args As (+ I 1) [[klvm-reg-> I X] | Acc]))
+                    where (number? A)
+  [[A] | As] I C -> (set-call-args As (+ I 1) [[klvm-reg-> I A] | Acc])
+  [X | As] _ _ -> (error "Unexpected arg expr: ~S~%" X))
+
 (define comp-call F Args Return-reg C ->
-  (let R (klvm-trans.regs-from-args Args [])
+  (let R (regs-from-args Args C [])
+       Nargs (length R)
+       . (set-call-args R C)
+    (put-opcode klvm.call C)))
 
 (define closure Return-reg Args Nregs Init Code C ->
   (let Ninit (length Init)

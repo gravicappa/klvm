@@ -45,6 +45,7 @@
 (defstruct context
   (func-name symbol)
   (stack-size number)
+  (max-stack-size number)
   (nargs number)
   (nregs number)
   (label number)
@@ -285,7 +286,8 @@ Y Y X X | R _ _ _ _
 (define emit-toplevel-expr
   [Head Name Args Nregs Code] F Acc ->
   (let Nargs (length Args)
-       C (mk-context Name (+ Nargs Nregs 2) Nargs Nregs -1 [] Acc [] none F)
+       N (+ Nargs Nregs 2)
+       C (mk-context Name N N Nargs Nregs -1 [] Acc [] none F)
        X (emit-func-entry C)
        X (emit-expr1 Code true C X)
        X (close-label C X)
