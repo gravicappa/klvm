@@ -8,9 +8,9 @@ of
   - closures,
   - exception handling.
 
-It consists of 3 translators: deinline-expr, reg-kl, klvm-trans.
+It consists of 3 translators: denest, reg-kl, klvm-trans.
 
-deinline-expr
+denest
 -------------
 _to be written_
 

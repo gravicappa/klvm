@@ -1,5 +1,5 @@
-(package klvm-trans [deinline-expr.deinline klvm-dump klvm-from-kl
-                     reg-kl.walk
+(package klvm-trans [denest.walk klvm-dump klvm-from-kl
+                     regkl.walk
                      shen-get-arg shen-get-reg shen-set-reg! shen-closure
                      shen-func shen-toplevel shen-freeze
                      klvm-func-entry-tpl
@@ -306,7 +306,7 @@ Y Y X X | R _ _ _ _
   _ _ -> (fail))
 
 (define klvm-from-kl
-  F X -> (let X' (reg-kl.walk (map (function deinline-expr.deinline) X) false)
+  F X -> (let X' (regkl.walk (map (function denest.walk) X) false)
               F (if (or (= F []) (not F))
                     null-fn
                     F)

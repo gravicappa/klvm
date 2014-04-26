@@ -3,5 +3,5 @@
                   [license: "GPLv3+"]
                   [desc: "KLambda to KLVM code translator"]
                   [depends: defstruct]
-                  [load: "reg-kl.shen" "deinline-expr.shen"
+                  [load: "regkl.shen" "denest.shen"
                          "klvm-trans.shen" "klvm-trans-call.shen"]])

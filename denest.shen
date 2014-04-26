@@ -1,4 +1,4 @@
-(package deinline-expr []
+(package denest []
 
 (define varname
   X [] -> X
