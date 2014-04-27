@@ -1,6 +1,7 @@
 (package klvm.s1 [denest.walk klvm-dump
                   regkl.walk regkl.get-arg regkl.get-reg regkl.set-reg!
-                  regkl.closure regkl.func regkl.toplevel regkl.freeze]
+                  regkl.closure regkl.func regkl.toplevel regkl.freeze
+                  klvm.native klvm.reg klvm.reg->]
 [])
 
 (defstruct context
@@ -99,14 +100,14 @@
 (define set-tailcall-args'
   [] Acc -> Acc
   [[D | D] | Ps] Acc -> (set-tailcall-args' Ps Acc)
-  [[D | [C]] | Ps] Acc -> (let Acc [[reg-> D C] | Acc]
+  [[D | [X]] | Ps] Acc -> (let Acc [[reg-> D X] | Acc]
                             (set-tailcall-args' Ps Acc))
   [[D | S] | Ps] Acc -> (let Acc [[reg-> D [reg S]] | Acc]
                           (set-tailcall-args' Ps Acc)))
 
 (define set-tailcall-args
   Nregs Args Acc -> (let P (place-args Nregs Args)
-                         Acc [[nregs-> [(+ (snd P) 1)]] | Acc]
+                         . (upd-context-max-extra-stack-size (+ (snd P) 1))
                          Acc (set-tailcall-args' (fst P) Acc)
                       (@p Acc (snd P))))
 
@@ -128,8 +129,23 @@
        Fn (context-native C)
        . (context-toplevel-> C (walk-func regkl.closure F A Nregs Body Fn TL))
     (if (= Return-reg [])
-        (walk-tailcall F Init C Acc)
+        w(walk-tailcall F Init C Acc)
         (walk-call F Init Return-reg C Acc))))
+
+(define prep-native-args
+  Args C -> (freeze (map (/. X (walk-x3 X C)) Args)))
+
+(define walk-native'
+  X [] Acc -> [[klvm.native X] | Acc]
+  X Return-reg Acc -> [[reg-> Return-reg [klvm.native X]] | Acc])
+
+(define walk-native
+  F Args Return-reg C Acc -> (let Args' (prep-native-args Args)
+                                  X ((context-native C) F Args')
+                               (if (= X (fail))
+                                   X
+                                   (walk-native' X Return-reg Acc))))
+
 
 (define walk-freeze
   Tgt-reg Nregs Init Body C Acc ->
@@ -158,7 +174,9 @@
   
   [regkl.get-arg R] Return-reg C Acc ->
     [[reg-> Return-reg [reg (func-arg R C)]] | Acc]
-  
+
+  [F | Args] Return-reg C Acc <- (walk-native F Args Return-reg C Acc)
+
   [F | Args] Return-reg C Acc -> (walk-call F Args Return-reg C Acc)
   X Return-reg C Acc -> [[reg-> Return-reg X] | Acc] where (const? X)
   X _ _ _ -> (error "Unexpected L2 Reg-KLambda expression ~S" X))
@@ -187,7 +205,6 @@
   Fn false Acc -> [[do | (reverse (Fn []))] | Acc])
 
 (define walk-x1
-  \\X _ _ _ _ <- (do (output "walk-x1: ~S~%" X) (fail))
   [do | X] Do? Tail? C Acc -> (in-do (walk-do X Tail? C) Do? Acc)
   [if If Then Else] _ Tail? C Acc -> (walk-if If Then Else Tail? C Acc)
   [regkl.get-reg R] _ true C Acc -> [[reg (func-reg R C)] | Acc]
@@ -222,7 +239,8 @@
   (let Nargs (length Args)
        C (mk-context Name Nregs Nargs (+ Nregs Nargs 2) 0 Toplevel Fn)
        Body' (walk-x1 Body false true C [])
-       X [(func-code Type) Name Args Nregs | (reverse Body')]
+       N (+ Nregs (context-max-extra-stack-size C))
+       X [(func-code Type) Name Args N | (reverse Body')]
     [X | (context-toplevel C)]))
 
 (define walk-1
@@ -236,10 +254,14 @@
   [] _ Acc -> (reverse Acc)
   [X | Y] Fn Acc -> (walk-toplevel' Y Fn (walk-1 X Fn Acc)))
 
+(define ensure-native
+  [] -> (/. X Y (fail))
+  X -> (/. X Y (fail)) where (= X _)
+  Fn -> Fn)
+
 (define klvm.s1.walk
   Fn X -> (let X' (regkl.walk (map (function denest.walk) X) false)
-               . (output "~%*REGKL:~%~S~%~%" X')
-            (walk-toplevel' X' Fn [])))
+            (walk-toplevel' X' (ensure-native Fn) [])))
 
 (define test-tailcall
   -> (set-tailcall-args 5 [3 2 [4]] []))
