@@ -131,7 +131,7 @@ Y Y X X | R _ _ _ _
                [(klvm-func-return-tpl X [klvm-reg (func-next-reg C)]) | Acc]))
 
 (define emit-return
-  Target-reg C Acc -> (emit-return-val [klvm-reg Target-reg] C Acc))
+  Reg C Acc -> (emit-return-val [klvm-reg Reg] C Acc))
 
 (define closure-args
   S N N Acc -> (reverse Acc)

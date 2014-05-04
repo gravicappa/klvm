@@ -3,7 +3,7 @@
                   regkl.closure regkl.func regkl.toplevel regkl.freeze
 
                   klvm.native klvm.reg klvm.reg-> klvm.call klvm.tailcall
-                  klvm.tailif klvm.if]
+                  klvm.tailif klvm.if klvm.return]
 
 (defstruct context
   (func symbol)
@@ -27,6 +27,7 @@
 (define func-reg X C -> (+ (context-nargs C) X))
 (define func-arg X C -> (- (context-nargs C) (+ X 1)))
 (define ret-reg C -> (context-stack-size C))
+(define func-next-reg C -> (- (context-stack-size C) 1))
 
 (define upd-context-max-extra-stack-size
   N C -> (context-max-extra-stack-size-> C N)
@@ -120,13 +121,17 @@
        X (set-tailcall-args (context-stack-size C) R Acc)
     [[klvm.tailcall F Nargs] | (fst X)]))
 
+(define closure-args
+  S N N Acc -> (reverse Acc)
+  S I N Acc -> (closure-args S (+ I 1) N [(concat S I) | Acc]))
+
 (define walk-closure
   Return-reg Args Nregs Init Body C Acc ->
   (let Ninit (length Init)
        Nargs (+ Ninit (length Args))
        F (gensym klvm-lambda)
        TL (context-toplevel C)
-       A (klvm-trans.closure-args (protect A) 0 Nargs [])
+       A (closure-args (protect A) 0 Nargs [])
        Fn (context-native C)
        . (context-toplevel-> C (walk-func regkl.closure F A Nregs Body Fn TL))
     (if (= Return-reg [])
@@ -209,9 +214,13 @@
 (define walk-x1
   [do | X] Do? Tail? C Acc -> (in-do (walk-do X Tail? C) Do? Acc)
   [if If Then Else] _ Tail? C Acc -> (walk-if If Then Else Tail? C Acc)
-  [regkl.get-reg R] _ true C Acc -> [[reg (func-reg R C)] | Acc]
+  [regkl.get-reg R] _ true C Acc -> [[klvm.return [klvm.reg (func-reg R C)]
+                                                  (func-next-reg C)]
+                                     | Acc]
   [regkl.get-reg _] _ false _ Acc -> Acc
-  [regkl.get-arg R] _ true C Acc -> [[reg (func-arg R C)] | Acc]
+  [regkl.get-arg R] _ true C Acc -> [[klvm.return [klvm.reg (func-arg R C)]
+                                                  (func-next-reg C)]
+                                     | Acc]
   [regkl.get-arg _] _ false _ Acc -> Acc
   [regkl.closure | _] _ false _ Acc ->  Acc
   [regkl.freeze | _ ] _ false _ Acc -> Acc
@@ -228,7 +237,7 @@
   [F | Args] Do? true C Acc -> (in-do (walk-tailcall F Args C) Do? Acc)
   [F | Args] Do? false C Acc -> (in-do (walk-call F Args [] C) Do? Acc)
   _ _ false _ Acc -> Acc
-  X _ true _ Acc -> [X | Acc]
+  X _ true _ Acc -> [[klvm.return X (func-next-reg C)] | Acc]
   X _ _ _ _ -> (error "Unexpected L1 Reg-KLambda expression ~S" X))
 
 (define func-code
@@ -263,7 +272,4 @@
 
 (define walk
   Fn X -> (let X' (regkl.walk (map (function denest.walk) X) false)
-            (walk-toplevel' X' (ensure-native Fn) [])))
-
-(define test-tailcall
-  -> (set-tailcall-args 5 [3 2 [4]] [])))
+            (walk-toplevel' X' (ensure-native Fn) []))))
