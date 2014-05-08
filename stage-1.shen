@@ -237,7 +237,7 @@
   [F | Args] Do? true C Acc -> (in-do (walk-tailcall F Args C) Do? Acc)
   [F | Args] Do? false C Acc -> (in-do (walk-call F Args [] C) Do? Acc)
   _ _ false _ Acc -> Acc
-  X _ true _ Acc -> [[klvm.return X (func-next-reg C)] | Acc]
+  X _ true C Acc -> [[klvm.return X (func-next-reg C)] | Acc]
   X _ _ _ _ -> (error "Unexpected L1 Reg-KLambda expression ~S" X))
 
 (define func-code

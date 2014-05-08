@@ -87,7 +87,7 @@
   F Nargs C Acc -> (let S (context-stack-size C)
                      (prepend (call-template klvm.tailcall F Nargs S) Acc)))
 
-(define emit-if-expr
+(define walk-if-expr
   X X-label _ true C Acc -> (let L (label X-label C Acc)
                               (walk-x1 X C L))
   X X-label After-label false C Acc -> (let L (label X-label C Acc)
@@ -95,20 +95,20 @@
                                          [[klvm.goto After-label] | Acc]))
 
 (define walk-if
-  If [klvm.reg R] Else Tail? C Acc -> 
+  [klvm.reg R] Then Else Tail? C Acc -> 
   (let If-label (next-label C)
        After-label (next-label C)
        Acc [[klvm.goto If-label] | Acc]
        Then-label (next-label C)
        Acc (walk-if-expr Then Then-label After-label Tail? C Acc)
        Else-label (next-label C)
-       Acc (walk-if-expr Elst Else-label After-label Tail? C Acc)
+       Acc (walk-if-expr Else Else-label After-label Tail? C Acc)
        Acc (label If-label C Acc)
        X [klvm.if [klvm.reg R] [klvm.goto Then-label] [klvm.goto Else-label]]
-       Acc [X | Acc])
+       Acc [X | Acc]
     (if Tail?
         Acc
-        (label After-label C Acc)))
+        (label After-label C Acc))))
 
 (define walk-do
   [X] C Acc -> (walk-x1 X C Acc)
@@ -138,16 +138,16 @@
                   Acc)))
 
 (define walk-toplevel-expr
-  [Type Name Args Nregs Stack-size Code] ->
+  [Type Name Args Nregs Stack-size Code] Acc ->
   (let Nargs (length Args)
-       C (mk-context Name Stack-size Nargs Nregs -1 [] [] [])
+       C (mk-context Name Stack-size Nargs Nregs -1 [] Acc [])
        X (func-entry C)
        X (walk-x1 Code C X)
        X (close-label C X)
-       Acc (context-toplevel C)
+       Acc' (context-toplevel C)
        Hdr (func-hdr Type)
-    [[Hdr Name Args Stack-size (reverse (context-func C))] | Acc])
-  where (element? Type [klvm.func klvm.closure klvm.toplevel]))
+    [[Hdr Name Args Stack-size (reverse (context-func C))] | Acc'])
+  where (element? Type [klvm.s1.func klvm.s1.closure klvm.s1.toplevel]))
 
 (define walk-toplevel
   [] Acc -> (reverse Acc)
