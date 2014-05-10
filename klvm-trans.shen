@@ -367,7 +367,7 @@ Y Y X X | R _ _ _ _
        . (for-each (pretty-print-label-code Out) Code)
        . (pr (make-string "  )~%") Out)
     (pretty-print-code Y Out))
-  where (element? Head [klvm-func klvm-toplevel klvm-closure])
+  where (element? Head [klvm.func klvm.toplevel klvm.closure])
   [X | Y] Out -> (let S (value *maximum-print-sequence-size*)
                       . (set *maximum-print-sequence-size* -1)
                       T1 (pr (make-string "  ~S~%" X) Out)

@@ -26,7 +26,6 @@
 
 (define func-reg X C -> (+ (context-nargs C) X))
 (define func-arg X C -> (- (context-nargs C) (+ X 1)))
-(define ret-reg C -> (context-stack-size C))
 (define func-next-reg C -> (- (context-stack-size C) 1))
 
 (define upd-context-max-extra-stack-size
@@ -142,16 +141,14 @@
   Args C -> (freeze (map (/. X (walk-x3 X C)) Args)))
 
 (define walk-native'
+  X _ _ -> X where (= X (fail))
   X [] Acc -> [[klvm.native X] | Acc]
   X Return-reg Acc -> [[reg-> Return-reg [klvm.native X]] | Acc])
 
 (define walk-native
   F Args Return-reg C Acc -> (let Args' (prep-native-args Args)
                                   X ((context-native C) F Args')
-                               (if (= X (fail))
-                                   X
-                                   (walk-native' X Return-reg Acc))))
-
+                               (walk-native' X Return-reg Acc)))
 
 (define walk-freeze
   Tgt-reg Nregs Init Body C Acc ->
@@ -207,9 +204,13 @@
   [X | Rest] Tail? C Acc -> (let Acc' (walk-x1 X true false C Acc)
                               (walk-do Rest Tail? C Acc')))
 
+(define in-do'
+  [X] -> X
+  [X | Y] -> [do | (reverse [X | Y])])
+
 (define in-do
   Fn true Acc -> (Fn Acc)
-  Fn false Acc -> [[do | (reverse (Fn []))] | Acc])
+  Fn false Acc -> [(in-do' (Fn [])) | Acc])
 
 (define walk-x1
   [do | X] Do? Tail? C Acc -> (in-do (walk-do X Tail? C) Do? Acc)

@@ -8,7 +8,8 @@
                   klvm.closure-> klvm.closure-nargs klvm.put-closure-args
                   klvm.closure-func klvm.nargs+ klvm.entry klvm.return
                   klvm.nargs-cond klvm.wipe-stack klvm.nargs klvm.func-obj
-                  klvm.nargs+ klvm.nargs- klvm.next klvm.next->
+                  klvm.nargs+ klvm.nargs- klvm.next klvm.next-> klvm.labels
+                  klvm.ret
 
                   klvm.s1.func klvm.s1.closure klvm.s1.toplevel
                   klvm.s1.return]
@@ -38,13 +39,13 @@
 
 (define label
   N C Acc -> (do (close-label C Acc)
-                 [[klvm.label N]]))
+                 [N]))
 
 (define entry-template
   Name Nargs -> [klvm.nargs-cond
                  [[klvm.nregs-> [1]]
-                  [klvm.reg-> 0 [klvm.func-obj Name Nargs]]
-                  [klvm.wipe-stack 1]
+                  [klvm.ret-> [klvm.func-obj Name Nargs]]
+                  [klvm.wipe-stack]
                   [klvm.return [klvm.next]]]
                  [[klvm.nargs- Nargs]]
                  [[klvm.sp+ [klvm.nargs]]
@@ -56,13 +57,13 @@
              [[klvm.closure-> X]
               [klvm.nregs-> [[klvm.nargs] [klvm.closure-nargs]]]
               [klvm.next-> Next]
-              [klvm.wipe-stack 0]
+              [klvm.wipe-stack]
               [klvm.put-closure-args 0]
               [klvm.sp- [klvm.nargs]]
               [klvm.call [klvm.closure-func]]]
-             [[klvm.reg-> 0 X]
+             [[klvm.ret-> X]
               [klvm.next-> Next]
-              [klvm.wipe-stack 1]
+              [klvm.wipe-stack]
               [klvm.return [klvm.next]]]])
 
 (define call-template
@@ -75,16 +76,21 @@
 
 (define walk-call
   F Nargs Ret-reg C Acc -> (let S (context-stack-size C)
+                                Next (next-label C)
+                                X [[klvm.next-> Next] | Acc]
                                 X (prepend (call-template klvm.call F Nargs S)
-                                           Acc)
-                                X (label (next-label C) C X)
-                                X [[klvm.sp- S] X]
-                                X [[klvm.reg-> Ret-reg [klvm.reg S]] | X]
-                                X [[klvm.wipe-stack S] | X]
+                                           X)
+                                X (label Next C X)
+                                X [[klvm.wipe-stack] | X]
+                                X [[klvm.sp- S] | X]
+                                X [[klvm.reg-> Ret-reg [klvm.ret]] | X]
                              X))
 
 (define walk-tailcall
   F Nargs C Acc -> (let S (context-stack-size C)
+                        Acc [[klvm.next->
+                              [klvm.reg (klvm.s1.func-next-reg C)]]
+                             | Acc]
                      (prepend (call-template klvm.tailcall F Nargs S) Acc)))
 
 (define walk-if-expr
@@ -146,7 +152,8 @@
        X (close-label C X)
        Acc' (context-toplevel C)
        Hdr (func-hdr Type)
-    [[Hdr Name Args Stack-size (reverse (context-func C))] | Acc'])
+       Labels [klvm.labels | (reverse (context-func C))]
+    [[Hdr Name Args Stack-size Labels] | Acc'])
   where (element? Type [klvm.s1.func klvm.s1.closure klvm.s1.toplevel]))
 
 (define walk-toplevel
