@@ -3,7 +3,7 @@
                   regkl.closure regkl.func regkl.toplevel regkl.freeze
 
                   klvm.native klvm.reg klvm.reg-> klvm.call klvm.tailcall
-                  klvm.tailif klvm.if klvm.return]
+                  klvm.tailif klvm.if klvm.return klvm.mk-closure]
 
 (defstruct context
   (func symbol)
@@ -50,13 +50,17 @@
   [[A] | As] I Acc -> (set-call-args As (+ I 1) [[klvm.reg-> I A] | Acc])
   [X | As] _ _ -> (error "Unexpected arg expr: ~S~%" X))
 
+(define call-args
+  [] -> []
+  X -> [do | (reverse X)])
+
 (define walk-call
   F Args Return-reg C Acc ->
   (let R (regs-from-args Args C [])
        Nargs (length R)
        . (upd-context-stack-size-extra Nargs C)
        X (set-call-args R (context-stack-size C) [])
-    [[klvm.call (walk-x3 F C) Nargs Return-reg [do | (reverse X)]] | Acc]))
+    [[klvm.call (walk-x3 F C) Nargs Return-reg (call-args X)] | Acc]))
 
 (define place-free-args
   [] _ _ Args Acc -> (@p Acc (reverse Args))
@@ -118,11 +122,18 @@
        Nargs (length R)
        . (upd-context-stack-size-extra Nargs C)
        X (set-tailcall-args (context-stack-size C) R [])
-    [[klvm.tailcall (walk-x3 F C) Nargs [do | (reverse (fst X))]] | Acc]))
+    [[klvm.tailcall (walk-x3 F C) Nargs (call-args (fst X))] | Acc]))
 
 (define closure-args
   S N N Acc -> (reverse Acc)
   S I N Acc -> (closure-args S (+ I 1) N [(concat S I) | Acc]))
+
+(define mk-closure
+  F [] Init [] C Acc -> (walk-tailcall klvm.mk-closure [F | Init] C Acc)
+  F [] Init Return-reg C Acc ->
+  (walk-call klvm.mk-closure [F | Init] Return-reg C Acc)
+  F Args Init [] C Acc -> (walk-tailcall F Init C Acc)
+  F Args Init Return-reg C Acc -> (walk-call F Init Return-reg C Acc))
 
 (define walk-closure
   Return-reg Args Nregs Init Body C Acc ->
@@ -133,9 +144,7 @@
        A (closure-args (protect A) 0 Nargs [])
        Fn (context-native C)
        . (context-toplevel-> C (walk-func regkl.closure F A Nregs Body Fn TL))
-    (if (= Return-reg [])
-        (walk-tailcall F Init C Acc)
-        (walk-call F Init Return-reg C Acc))))
+    (mk-closure F Args Init Return-reg C Acc)))
 
 (define prep-native-args
   Args C -> (freeze (map (/. X (walk-x3 X C)) Args)))

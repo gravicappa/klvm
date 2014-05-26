@@ -1,8 +1,5 @@
 (package klvm.s2 [denest.walk klvm-dump
 
-                  regkl.walk regkl.get-arg regkl.get-reg regkl.set-reg!
-                  regkl.closure regkl.func regkl.toplevel regkl.freeze
-
                   klvm.native klvm.reg-> klvm.if klvm.tailif 
                   klvm.sp+ klvm.sp- klvm.nargs-> klvm.closure->
                   klvm.put-closure-args klvm.nargs+ klvm.entry 
@@ -96,12 +93,16 @@
   [] Acc -> Acc
   Ret-reg Acc -> [[klvm.reg-> Ret-reg [klvm.ret]] | Acc])
 
+(define prepare-args
+  [] _ Acc -> Acc
+  Args C Acc -> (walk-x1 Args C Acc))
+
 (define walk-call
   F Nargs Ret-reg Prep C Acc -> (let S (context-stack-size C)
                                      Next (next-label C)
                                      X [[klvm.next-> Next] | Acc]
                                      X [[klvm.closure-> F] | X]
-                                     X (walk-x1 Prep C X)
+                                     X (prepare-args Prep C X)
                                      X (prepend (call-template Nargs S) X)
                                      X (label Next C X)
                                      X [[klvm.wipe-stack] | X]
@@ -112,7 +113,7 @@
 (define walk-tailcall
   F Nargs Prep C Acc -> (let Acc [[klvm.next-> [klvm.reg (next-reg C)]] | Acc]
                              Acc [[klvm.closure-> F] | Acc]
-                             Acc (walk-x1 Prep C Acc)
+                             Acc (prepare-args Prep C Acc)
                           (prepend (tailcall-template Nargs) Acc)))
 
 (define walk-if-expr
@@ -121,22 +122,6 @@
   X X-label After-label false C Acc -> (let L (label X-label C Acc)
                                             Acc (walk-x1 X C L)
                                          [[klvm.goto After-label] | Acc]))
-
-(define walk-if
-  [klvm.reg R] Then Else Tail? C Acc -> 
-  (let If-label (next-label C)
-       After-label (next-label C)
-       Acc [[klvm.goto If-label] | Acc]
-       Then-label (next-label C)
-       Acc (walk-if-expr Then Then-label After-label Tail? C Acc)
-       Else-label (next-label C)
-       Acc (walk-if-expr Else Else-label After-label Tail? C Acc)
-       Acc (label If-label C Acc)
-       X [klvm.if [klvm.reg R] [klvm.goto Then-label] [klvm.goto Else-label]]
-       Acc [X | Acc]
-    (if Tail?
-        Acc
-        (label After-label C Acc))))
 
 (define walk-if
   [klvm.reg R] Then Else Tail? C Acc -> 
@@ -152,7 +137,6 @@
         (label After-label C Acc))))
 
 (define walk-do
-  [] _ Acc -> Acc
   [X] C Acc -> (walk-x1 X C Acc)
   [X | Xs] C Acc -> (walk-do Xs C (walk-x1 X C Acc)))
 
