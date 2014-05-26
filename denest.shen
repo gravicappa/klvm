@@ -28,7 +28,8 @@
   Cond Let Env -> (walk-expr (walk-cond-aux Cond) Let Env))
 
 (define walk-lambda
-  X Body Let Env -> (@p [lambda X (walk-aux Body Env)] Let))
+  X Body Let Env -> (let Env' [[X | X] | Env]
+                      (@p [lambda X (walk-aux Body Env')] Let)))
 
 (define walk-freeze
   X Let Env -> (@p [freeze (walk-aux X Env)] Let))
