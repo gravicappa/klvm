@@ -13,7 +13,7 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>. *\
 
-(package regkl [klvm.trap-error-fn]
+(package regkl [klvm.trap-error-fn regkl.freeze]
 
 (defstruct context
   (toplevel s-expr)
@@ -209,10 +209,10 @@
 (define walk-lambda-aux
   X [lambda Y Body] Args Env Used C -> (walk-lambda-aux
                                          Y Body [X | Args] Env Used C)
-  X Body Args Env Used C -> (let Args (reverse [X | Args])
-                                 A (append Used (reverse [X | Args]))
+  X Body Args Env Used C -> (let Args' (reverse [X | Args])
+                                 A (append Used Args')
                                  X (mk-closure-list A Body Env Used C)
-                              [closure Args (context-nregs C) | X]))
+                              [closure Args' (context-nregs C) | X]))
 
 (define walk-lambda
   X Code Args Env C -> (let U (used-vars [lambda X Code] Env)
@@ -225,7 +225,7 @@
   Code Env Used C -> (let C' (mk-context (context-toplevel C) 0)
                           X (mk-closure-list Used Code Env Used C')
                           TL (context-toplevel-> C (context-toplevel C'))
-                       [freeze (context-nregs C') | X]))
+                       [regkl.freeze (context-nregs C') | X]))
 
 (define lift-defun
   F Args Body C -> (let C' (mk-context (context-toplevel C) 0)
