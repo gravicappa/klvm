@@ -1,4 +1,6 @@
-(package klvm.s2 [denest.walk klvm-dump
+(package klvm.s2 [denest.walk
+
+                  regkl.trap-error
 
                   klvm.native klvm.reg-> klvm.if klvm.tailif 
                   klvm.sp+ klvm.sp- klvm.nargs-> klvm.closure->
@@ -6,6 +8,7 @@
                   klvm.nargs-cond klvm.wipe-stack klvm.nargs+ klvm.nargs-
                   klvm.next-> klvm.labels klvm.ret-> klvm.goto klvm.goto-next
                   klvm.return
+                  klvm.push-error-handler klvm.pop-error-handler
 
                   klvm.reg klvm.ret klvm.next klvm.nargs klvm.func-obj
                   klvm.closure-nargs
@@ -47,6 +50,7 @@
 
 (define entry-template
   Name Nargs -> [klvm.nargs-cond
+                 Nargs
                  [[klvm.nregs-> [1]]
                   [klvm.ret-> [klvm.func-obj Name Nargs]]
                   [klvm.wipe-stack]
@@ -149,7 +153,9 @@
   [klvm.reg-> R X] C Acc -> [[klvm.reg-> R X] | Acc]
   [klvm.return X Next] C Acc -> (let R (nargs-reg C)
                                      Acc' [[klvm.nargs-> [klvm.reg R]] | Acc]
-                                  [(return-op X Next) | Acc']))
+                                  [(return-op X Next) | Acc'])
+  [klvm.push-error-handler E] C Acc -> [[klvm.push-error-handler E] | Acc]
+  [klvm.pop-error-handler] C Acc -> [[klvm.pop-error-handler] | Acc])
 
 (define func-hdr
   klvm.s1.func -> klvm.func
@@ -183,3 +189,15 @@
 
 (define klvm.s2.walk
   X -> (walk-toplevel X []))
+
+(define klvm.s2.runtime
+  -> (let X (intern "X")
+          E (intern "E")
+          R (intern "R")
+      [[defun regkl.trap-error [X E]
+         [do [klvm.push-error-handler E]
+             [let R [X]
+               [do [klvm.pop-error-handler]
+                   R]]]]
+
+       [defun klvm.thaw [X] [X]]]))

@@ -21,7 +21,7 @@
   (ret klvm-ret set-klvm-ret!) 
 
   ;; Stack of error handlers.
-  (err-handlers klvm-err-handler set-klvm-err-handlers!)
+  (err-handlers klvm-err-handlers set-klvm-err-handlers!)
 
   ;; Table of functions.
   (fns klvm-fns)
@@ -45,6 +45,13 @@
 
   ;; Name of a function if applicable (used basically for printing)
   (name klvm-closure-name set-klvm-closure-name!))
+
+(define-record-type klvm-error-handler
+  (mk-klvm-error-handler func sp next)
+  klvm-error-handler?
+  (func klvm-error-handler-func)
+  (sp klvm-error-handler-sp)
+  (next klvm-error-handler-next))
 
 (define-record-type end-marker (mk-end-marker name) end-marker? (name))
 
@@ -84,7 +91,19 @@
            (table-set! (klvm-fns vm) (klvm-closure-name func) func)
            func))))
 
-(define (mk-closure-primitive vm)
+(define (push-error-handler handler vm)
+  (let ((x (mk-klvm-error-handler handler (klvm-sp vm) (klvm-next vm))))
+    (set-klvm-err-handlers! vm (cons x (klvm-err-handlers vm)))
+    #f))
+
+(define (pop-error-handler vm)
+  (if (pair? (klvm-err-handlers vm))
+      (let ((e (car (klvm-err-handlers vm))))
+        (set-klvm-err-handlers! vm (cdr (klvm-err-handlers vm)))
+        e)
+      #f))
+
+(define (closure-primitive vm)
   (lambda (func . args)
     (let ((f (ensure-func func vm)))
       (mk-klvm-closure (klvm-closure-name f)
@@ -105,13 +124,20 @@
                            args)))
               (#t
                (log/pp `(calling native (,name ,@args)))
-               (set-klvm-ret!
-                vm
-                (if (< i arity)
-                    (mk-klvm-closure name arity (wrap func) args)
-                    (apply func args)))
-               (log/pp `((,name ,@args) => ,(klvm-ret vm)))
-               (klvm-next vm))))))
+               (cond ((< i arity)
+                      (set-klvm-ret!
+                       vm (mk-klvm-closure name arity (wrap func) args))
+                      (log/pp `((,name ,@args) => ,(klvm-ret vm)))
+                      (klvm-next vm))
+                     (#t
+                      (with-exception-catcher
+                        (lambda (e)
+                          (log/pp `((,name ,@args) => ,e))
+                          e)
+                        (lambda ()
+                          (set-klvm-ret! vm (apply func args))
+                          (log/pp `((,name ,@args) => ,(klvm-ret vm)))
+                          (klvm-next vm))))))))))
   (let ((fn (mk-klvm-closure name arity (wrap func) '())))
     (klvm-add-func fn vm)))
 
@@ -135,7 +161,7 @@
     (klvm-add-func fn vm)))
 
 (define (klvm-init-native vm)
-  (klvm-add-primitive vm 'klvm.mk-closure (mk-closure-primitive vm))
+  (klvm-add-primitive vm 'klvm.mk-closure (closure-primitive vm))
   (klvm-add-native vm 'list7 7 list)
   (klvm-add-native vm 'list4 4 list)
   (klvm-add-native vm '= 2 equal?)
@@ -249,6 +275,7 @@
 (define (klvm-entry name nargs)
   ;; Function entry template returned by (klvm.entry-template)
   `((klvm.nargs-cond
+     ,nargs
      ((klvm.nregs-> (1))
       (klvm.ret-> (klvm.func-obj ,name ,nargs))
       (klvm.wipe-stack)
@@ -274,9 +301,32 @@
       (klvm.goto-next)))))
 
 (define (ensure-func func vm)
-  (if (symbol? func)
-      (klvm-fn-ref vm func)
-      func))
+  (cond ((symbol? func) (klvm-fn-ref vm func))
+        ((klvm-closure? func) func)
+        (#t (error `(is not a function ,func)))))
+
+(define (func-obj expr func vm)
+  (let loop ((i 0)
+             (args '()))
+    (if (< i (klvm-nargs vm))
+        (loop (+ i 1)
+              (cons (vector-ref (klvm-regs vm) (+ (klvm-sp vm) i))
+                    args))
+        (mk-klvm-closure (cadr expr)
+                         (caddr expr)
+                         (klvm-closure-code func)
+                         (reverse args)))))
+
+(define (put-closure-args expr closure vm)
+  (let ((n (cadr expr))
+        (nargs (length (klvm-closure-vars closure))))
+    (klvm-ensure-regs-size! vm (+ nargs n))
+    (let loop ((args (klvm-closure-vars closure))
+               (i (+ (klvm-sp vm) n)))
+      (cond ((pair? args)
+             (vector-set! (klvm-regs vm) i (car args))
+             (loop (cdr args) (+ i 1)))
+            (#t (set-klvm-nargs! vm (+ (klvm-nargs vm) nargs)))))))
 
 (define (klvm-eval func label vm)
   (define closure #f)
@@ -290,17 +340,7 @@
           ((klvm.ret) (klvm-ret vm))
           ((klvm.next) (klvm-next vm))
           ((klvm.nargs) (klvm-nargs vm))
-          ((klvm.func-obj)
-           (let loop ((i 0)
-                      (args '()))
-             (if (< i (klvm-nargs vm))
-                 (loop (+ i 1)
-                       (cons (vector-ref (klvm-regs vm) (+ (klvm-sp vm) i))
-                             args))
-                 (mk-klvm-closure (cadr expr)
-                                  (caddr expr)
-                                  (klvm-closure-code func)
-                                  (reverse args)))))
+          ((klvm.func-obj) (func-obj expr func vm))
           ((klvm.closure-nargs) (length (klvm-closure-vars closure)))
           (else (error `(unexpected expr2 ,expr))))
         (case expr
@@ -329,32 +369,24 @@
             ((klvm.nargs-cond)
              (log/pp `(nargs-cond
                        nargs: ,(klvm-nargs vm)
-                       arity: ,(klvm-closure-arity func)
+                       arity: ,(cadr expr)
                        func: ,(klvm-closure-name func)))
-             (cond ((< (klvm-nargs vm) (klvm-closure-arity func))
-                    (eval-1 (append (cadr expr) (cdr exprs))))
-                   ((= (klvm-nargs vm) (klvm-closure-arity func))
-                    (eval-1 (append (caddr expr) (cdr exprs))))
-                   ((> (klvm-nargs vm) (klvm-closure-arity func))
-                    (eval-1 (append (cadddr expr) (cdr exprs))))))
+             (cond ((< (klvm-nargs vm) (cadr expr))
+                    (eval-1 (append (list-ref expr 2) (cdr exprs))))
+                   ((= (klvm-nargs vm) (cadr expr))
+                    (eval-1 (append (list-ref expr 3) (cdr exprs))))
+                   ((> (klvm-nargs vm) (cadr expr))
+                    (eval-1 (append (list-ref expr 4) (cdr exprs))))))
             ((klvm.if-nargs>0)
              (if (> (klvm-nargs vm) 0)
                  (eval-1 (append (cadr expr) (cdr exprs)))
                  (eval-1 (append (caddr expr) (cdr exprs)))))
             (else
              (case (car expr)
-               ((klvm.put-closure-args)
-                (let ((n (cadr expr))
-                      (nargs (length (klvm-closure-vars closure))))
-                  (klvm-ensure-regs-size! vm (+ nargs n))
-                  (let loop ((args (klvm-closure-vars closure))
-                             (i (+ (klvm-sp vm) n)))
-                    (cond ((pair? args)
-                           (vector-set! (klvm-regs vm) i (car args))
-                           (loop (cdr args) (+ i 1)))
-                          (#t
-                           (set-klvm-nargs! vm (+ (klvm-nargs vm) nargs)))))))
-               
+               ((klvm.push-error-handler)
+                (push-error-handler (eval-2 (cadr expr)) vm))
+               ((klvm.pop-error-handler) (pop-error-handler vm))
+               ((klvm.put-closure-args) (put-closure-args expr closure vm))
                ((klvm.ret->) (set-klvm-ret! vm (eval-2 (cadr expr))))
                ((klvm.nregs->)
                 (klvm-ensure-regs-size! vm (apply + (map eval-2
@@ -410,8 +442,18 @@
     (show-step vm next)
     (cond ((pair? next) (loop (klvm-eval (car next) (cdr next) vm)))
           ((not next) #t)
-          ((tag? next) #t)
-          (#t (log/pp `(exception: ,next))))))
+          ((end-marker? next) #t)
+          (#t
+           (log/pp `(exception: ,next))
+           (log/pp `(handlers: ,(klvm-err-handlers vm)))
+           (let ((e (pop-error-handler vm)))
+             (cond ((klvm-error-handler? e)
+                    (log/pp `(handler: ,e))
+                    (set-klvm-sp! vm (klvm-error-handler-sp e))
+                    (set-klvm-next! vm (klvm-error-handler-next e))
+                    (klvm-call* (klvm-error-handler-func e) (list next) vm)
+                    (loop (cons (klvm-error-handler-func e) 0)))
+                   (#t (error `(unhandled exception ,next)))))))))
 
 (define (klvm-put-args args vm)
   (let loop ((args args)
@@ -421,18 +463,21 @@
            (loop (cdr args) (+ i 1)))
           (#t i))))
 
+(define (klvm-call* fn args vm)
+  (let ((fn (ensure-func fn vm))
+        (nargs (length args)))
+    (set-klvm-ret! vm #f)
+    (set-klvm-nargs! vm (+ nargs (length (klvm-closure-vars fn))))
+    (klvm-ensure-regs-size! vm (klvm-nargs vm))
+    (klvm-put-args (append (reverse args) (klvm-closure-vars fn)) vm)))
+
 (define (klvm-call vm fn . args)
-  (let ((fn (if (klvm-closure? fn)
-                fn
-                (klvm-fn-ref vm fn)))
+  (let ((fn (ensure-func fn vm))
         (nargs (length args))
         (old-sp (klvm-sp vm)))
     (set-klvm-sp-top! vm (klvm-sp vm))
     (set-klvm-next! vm (mk-end-marker "END"))
-    (set-klvm-ret! vm #f)
-    (set-klvm-nargs! vm (+ nargs (length (klvm-closure-vars fn))))
-    (klvm-ensure-regs-size! vm (klvm-nargs vm))
-    (klvm-put-args (append (reverse args) (klvm-closure-vars fn)) vm)
+    (klvm-call* fn args vm)
     (klvm-run fn 0 vm)
     (if (not (= old-sp (klvm-sp vm)))
         (log/pp `(SP IS BROKEN: ,(klvm-sp vm) (expected: ,old-sp))))
@@ -491,5 +536,7 @@
           (klvm-test.test-let-1 #f) => #(4 0 1 2 klvm-test.one)
           (klvm-test.test-freeze-2) => 80
           (klvm-test.test-trap-error) => 0
-          (klvm-test.test-trap-error-aux) => 0
+          (klvm-test.test-trap-error-2) => 0
+          (klvm-test.test-trap-error-3) => 0
+          (klvm-test.test-trap-error-4) => 0
         )))

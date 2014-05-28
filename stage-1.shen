@@ -1,9 +1,12 @@
 (package klvm.s1 [denest.walk klvm-dump
                   regkl.walk regkl.get-arg regkl.get-reg regkl.set-reg!
                   regkl.closure regkl.func regkl.toplevel regkl.freeze
+                  regkl.trap-error
 
                   klvm.native klvm.reg klvm.reg-> klvm.call klvm.tailcall
-                  klvm.tailif klvm.if klvm.return klvm.mk-closure]
+                  klvm.tailif klvm.if klvm.return klvm.mk-closure
+                  klvm.push-error-handler
+                  klvm.pop-error-handler]
 
 (defstruct context
   (func symbol)
@@ -147,17 +150,22 @@
     (mk-closure F Args Init Return-reg C Acc)))
 
 (define prep-native-args
-  Args C -> (freeze (map (/. X (walk-x3 X C)) Args)))
+  Args C -> (map (/. X (walk-x3 X C)) Args))
 
 (define walk-native'
-  X _ _ -> X where (= X (fail))
-  X [] Acc -> [[klvm.native X] | Acc]
-  X Return-reg Acc -> [[reg-> Return-reg [klvm.native X]] | Acc])
+  X _ _ _ -> X where (= X (fail))
+  X [] false Acc -> [[klvm.native X] | Acc]
+  X Return-reg false Acc -> [[reg-> Return-reg [klvm.native X]] | Acc]
+  X _ true Acc -> [[klvm.return [klvm.native X]] | Acc])
 
 (define walk-native
-  F Args Return-reg C Acc -> (let Args' (prep-native-args Args)
-                                  X ((context-native C) F Args')
-                               (walk-native' X Return-reg Acc)))
+  F Args [] _ C Acc -> (let X [F | (prep-native-args Args C)]
+                         [X | Acc])
+                       where (element? F [klvm.push-error-handler
+                                          klvm.pop-error-handler])
+  F Args Return-reg Tail? C Acc -> (let A (freeze (prep-native-args Args C))
+                                        X ((context-native C) F A)
+                                     (walk-native' X Return-reg Tail? Acc)))
 
 (define walk-freeze
   Tgt-reg Nregs Init Body C Acc ->
@@ -170,6 +178,11 @@
   [regkl.get-arg R] C -> [klvm.reg (func-arg R C)]
   X C -> X where (const? X)
   X _ -> (error "Unexpected L3 Reg-KLambda ~S." X))
+
+(define walk-apply
+  F Args Return-reg Tail? C Acc <- (walk-native F Args Return-reg Tail? C Acc)
+  F Args Return-reg false C Acc -> (walk-call F Args Return-reg C Acc)
+  F Args _ true C Acc -> (walk-tailcall F Args C Acc))
 
 (define walk-x2
   [type X Type] Return-reg C Acc -> (do (warn-type)
@@ -187,9 +200,7 @@
   [regkl.get-arg R] Return-reg C Acc ->
     [[klvm.reg-> Return-reg [klvm.reg (func-arg R C)]] | Acc]
 
-  [F | Args] Return-reg C Acc <- (walk-native F Args Return-reg C Acc)
-  [F | Args] Return-reg C Acc -> (walk-call F Args Return-reg C Acc)
-
+  [F | Args] Return-reg C Acc -> (walk-apply F Args Return-reg false C Acc)
   X Return-reg C Acc -> [[klvm.reg-> Return-reg X] | Acc] where (const? X)
   X _ _ _ -> (error "Unexpected L2 Reg-KLambda expression ~S" X))
 
@@ -244,8 +255,7 @@
   [regkl.freeze Nregs Init Body] Do? true C Acc ->
   (in-do (walk-freeze [] Nregs Init Body C) Do? Acc)
 
-  [F | Args] Do? true C Acc -> (in-do (walk-tailcall F Args C) Do? Acc)
-  [F | Args] Do? false C Acc -> (in-do (walk-call F Args [] C) Do? Acc)
+  [F | Args] Do? Tail? C Acc -> (in-do (walk-apply F Args [] Tail? C) Do? Acc)
   _ _ false _ Acc -> Acc
   X _ true C Acc -> [[klvm.return X (func-next-reg C)] | Acc]
   X _ _ _ _ -> (error "Unexpected L1 Reg-KLambda expression ~S" X))

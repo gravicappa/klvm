@@ -13,7 +13,7 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>. *\
 
-(package regkl [klvm.trap-error-fn regkl.freeze]
+(package regkl [regkl.freeze regkl.trap-error]
 
 (defstruct context
   (toplevel s-expr)
@@ -234,8 +234,12 @@
                      [function F]))
 
 (define walk-trap
-  X E Env Used Unext C -> (let X' [klvm.trap-error-fn [freeze X] E]
-                            (walk-expr X' Env Used Unext C)))
+  X E Env Used Unext C -> (let X' (gensym (protect Shenkl.))
+                               E' (gensym (protect Shenkl.))
+                               Code [let X' [freeze X]
+                                      [let E' E
+                                        [regkl.trap-error X' E']]]
+                            (walk-expr Code Env Used Unext C)))
 
 (define walk-expr
   [let X V Body] Env Used Unext C -> (walk-let X V Body Env Used Unext C)
