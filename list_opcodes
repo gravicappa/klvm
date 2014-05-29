@@ -1,18 +1,8 @@
 #!/bin/sh
 exclude="
-  klvm-lambda
-  klvm-runtime
-  klvm-trap-error
-  klvm-call-error-handler
-  klvm-from-kl
-  klvm-thaw
-  klvm-dump
-  klvm-mk-closure
-  klvm-func-entry-tpl
-  klvm-func-return-tpl
-"
+ klvm.s2.walk klvm.s1.func klvm.s1.closure klvm.s1.toplevel klvm.s1.return"
 dir="$(dirname "$0")"
-cat "$dir"/klvm-trans*.shen \
+cat "$dir"/stage-2.shen \
 | awk -v e="$exclude" '
 BEGIN {
   FS = "[ ()\\[\\]]"
@@ -25,10 +15,10 @@ BEGIN {
 /^[a-zA-Z()]/ {inpackage = 0}
 !inpackage {
   for (i = 1; i <= NF; ++i)
-    if ($i != "" && $i ~ /^klvm-/ && !($i ~ /\./) && !($i in exclude))
+    if (($i != "") && ($i ~ /^klvm\./) && !($i in exclude))
       op[$i] = 1
 }
 END {
   for (x in op)
     print(x)
-}'
+}' | sort

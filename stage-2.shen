@@ -1,21 +1,18 @@
 (package klvm.s2 [denest.walk
-
+                  
                   regkl.trap-error
+                  
+                  klvm.call klvm.closure klvm.closure-> klvm.closure-nargs
+                  klvm.entry klvm.func klvm.func-obj klvm.goto klvm.goto-next
+                  klvm.if klvm.if-nargs>0 klvm.labels klvm.nargs klvm.nargs-
+                  klvm.nargs-> klvm.nargs-cond klvm.next klvm.next->
+                  klvm.nregs-> klvm.pop-error-handler klvm.push-error-handler
+                  klvm.put-closure-args klvm.reg klvm.reg-> klvm.ret
+                  klvm.ret-> klvm.return klvm.s2.runtime klvm.sp+ klvm.sp-
+                  klvm.tailcall klvm.tailif klvm.thaw klvm.toplevel
+                  klvm.wipe-stack
 
-                  klvm.native klvm.reg-> klvm.if klvm.tailif 
-                  klvm.sp+ klvm.sp- klvm.nargs-> klvm.closure->
-                  klvm.put-closure-args klvm.nargs+ klvm.entry 
-                  klvm.nargs-cond klvm.wipe-stack klvm.nargs+ klvm.nargs-
-                  klvm.next-> klvm.labels klvm.ret-> klvm.goto klvm.goto-next
-                  klvm.return
-                  klvm.push-error-handler klvm.pop-error-handler
-
-                  klvm.reg klvm.ret klvm.next klvm.nargs klvm.func-obj
-                  klvm.closure-nargs
-
-                  klvm.call klvm.tailcall klvm.s1.func klvm.s1.closure
-                  klvm.s1.toplevel klvm.s1.return]
-[])
+                  klvm.s1.func klvm.s1.closure klvm.s1.toplevel klvm.s1.return]
 
 (defstruct context
   (func-name symbol)
@@ -187,10 +184,10 @@
   [] Acc -> (reverse Acc)
   [X | Y] Acc -> (walk-toplevel Y (walk-toplevel-expr X Acc)))
 
-(define klvm.s2.walk
+(define walk
   X -> (walk-toplevel X []))
 
-(define klvm.s2.runtime
+(define runtime
   -> (let X (intern "X")
           E (intern "E")
           R (intern "R")
@@ -198,6 +195,4 @@
          [do [klvm.push-error-handler E]
              [let R [X]
                [do [klvm.pop-error-handler]
-                   R]]]]
-
-       [defun klvm.thaw [X] [X]]]))
+                   R]]]]])))

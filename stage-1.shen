@@ -181,6 +181,7 @@
 
 (define walk-apply
   F Args Return-reg Tail? C Acc <- (walk-native F Args Return-reg Tail? C Acc)
+  thaw [X] Return-reg Tail? C Acc -> (walk-apply X [] Return-reg Tail? C Acc)
   F Args Return-reg false C Acc -> (walk-call F Args Return-reg C Acc)
   F Args _ true C Acc -> (walk-tailcall F Args C Acc))
 
