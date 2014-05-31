@@ -1,4 +1,4 @@
-(package klvm.s1 [denest.walk klvm-dump
+(package klvm.s1 [denest.walk klvm-dump klvm.omit-toplevel-constants?
                   regkl.walk regkl.get-arg regkl.get-reg regkl.set-reg!
                   regkl.closure regkl.func regkl.toplevel regkl.freeze
                   regkl.trap-error
@@ -16,6 +16,8 @@
   (stack-size-extra number)
   (toplevel s-expr)
   (native (A --> context --> A)))
+
+(set klvm.omit-toplevel-constants? true)
 
 (define warning X -> (output "Warning: ~A" X))
 (define warn-type -> (warning "`type` expression is not supported yet"))
@@ -167,10 +169,6 @@
                                         X ((context-native C) F A)
                                      (walk-native' X Return-reg Tail? Acc)))
 
-(define walk-freeze
-  Tgt-reg Nregs Init Body C Acc ->
-  (walk-closure Tgt-reg [] Nregs Init Body C Acc))
-
 (define walk-x3
   [type X Type] C -> (do (warn-type)
                          (walk-x3 X C))
@@ -193,7 +191,7 @@
     (walk-closure Return-reg Args Nregs Init Body C Acc)
   
   [regkl.freeze Nregs Init Body] Return-reg C Acc ->
-    (walk-freeze Return-reg Nregs Init Body C Acc)
+    (walk-closure Return-reg [] Nregs Init Body C Acc)
   
   [regkl.get-reg R] Return-reg C Acc ->
     [[klvm.reg-> Return-reg [klvm.reg (func-reg R C)]] | Acc]
@@ -254,7 +252,7 @@
   (in-do (walk-closure [] Args Nregs Init Body C) Do? Acc)
 
   [regkl.freeze Nregs Init Body] Do? true C Acc ->
-  (in-do (walk-freeze [] Nregs Init Body C) Do? Acc)
+  (in-do (walk-closure [] [] Nregs Init Body C) Do? Acc)
 
   [F | Args] Do? Tail? C Acc -> (in-do (walk-apply F Args [] Tail? C) Do? Acc)
   _ _ false _ Acc -> Acc
@@ -284,6 +282,9 @@
   (walk-func Type Name Args Nregs Body Fn Toplevel)
   where (element? Type [regkl.func regkl.toplevel regkl.closure])
   [X | Y] _ _ -> (error "Unexpected toplevel expression ~S~%" [X | Y])
+  X Fn Toplevel -> (walk-func
+                    regkl.toplevel (gensym toplevel) [] 0 X Fn Toplevel)
+                   where (not (value klvm.omit-toplevel-constants?))
   X _ Toplevel -> Toplevel)
 
 (define walk-toplevel'
