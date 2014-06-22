@@ -48,16 +48,16 @@
                  [N]))
 
 (define klvm.entry-template
-  Name Nargs -> [klvm.nargs-cond
-                 Nargs
-                 [[klvm.nregs-> [1]]
-                  [klvm.ret-> [klvm.func-obj Name Nargs]]
-                  [klvm.wipe-stack]
-                  [klvm.goto-next]]
-                 [[klvm.nargs- Nargs]]
-                 [[klvm.sp+ [klvm.nargs]]
-                  [klvm.sp- Nargs]
-                  [klvm.nargs- Nargs]]])
+  Func Nargs Name -> [klvm.nargs-cond
+                      Nargs
+                      [[klvm.nregs-> [1]]
+                       [klvm.ret-> [klvm.func-obj Func Nargs Name]]
+                       [klvm.wipe-stack]
+                       [klvm.goto-next]]
+                      [[klvm.nargs- Nargs]]
+                      [[klvm.sp+ [klvm.nargs]]
+                       [klvm.sp- Nargs]
+                       [klvm.nargs- Nargs]]])
 
 (define klvm.return-template
   X Next -> [klvm.if-nargs>0
@@ -85,9 +85,9 @@
             [klvm.call]])
 
 (define entry-op
-  Name Nargs -> (klvm.entry-template Name Nargs)
+  Name Nargs -> (klvm.entry-template Name Nargs Name)
                 where (value inline-func-entry)
-  Name Nargs -> [klvm.entry Name Nargs])
+  Name Nargs -> [klvm.entry Name Nargs Name])
 
 (define return-op
   X Next -> (klvm.return-template X Next) where (value inline-func-return)

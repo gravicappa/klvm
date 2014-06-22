@@ -284,12 +284,12 @@
            (read-klvm (reverse code) vm)
            (loop (read) (cons obj code)))))))
 
-(define (klvm-entry name nargs)
+(define (klvm-entry func nargs)
   ;; Function entry template returned by (klvm.entry-template)
   `((klvm.nargs-cond
      ,nargs
      ((klvm.nregs-> (1))
-      (klvm.ret-> (klvm.func-obj ,name ,nargs))
+      (klvm.ret-> (klvm.func-obj ,func ,nargs ,func))
       (klvm.wipe-stack)
       (klvm.goto-next))
      ((klvm.nargs- ,nargs))
