@@ -159,7 +159,7 @@
 (define walk-native'
   X _ _ C _ -> X where (= X (fail))
   X [] false C Acc -> [[klvm.native X] | Acc]
-  X Return-reg false C Acc -> [[reg-> Return-reg [klvm.native X]] | Acc]
+  X Return-reg false C Acc -> [[klvm.reg-> Return-reg [klvm.native X]] | Acc]
   X _ true C Acc -> [[klvm.return [klvm.native X] (func-next-reg C)] | Acc])
 
 (define walk-native
