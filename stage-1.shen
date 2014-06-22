@@ -157,17 +157,17 @@
   Args C -> (map (/. X (walk-x3 X C)) Args))
 
 (define walk-native'
-  X _ _ _ -> X where (= X (fail))
-  X [] false Acc -> [[klvm.native X] | Acc]
-  X Return-reg false Acc -> [[reg-> Return-reg [klvm.native X]] | Acc]
-  X _ true Acc -> [[klvm.return [klvm.native X]] | Acc])
+  X _ _ C _ -> X where (= X (fail))
+  X [] false C Acc -> [[klvm.native X] | Acc]
+  X Return-reg false C Acc -> [[reg-> Return-reg [klvm.native X]] | Acc]
+  X _ true C Acc -> [[klvm.return [klvm.native X] (func-next-reg C)] | Acc])
 
 (define walk-native
   F Args [] _ C Acc -> [[F | Args] | Acc]
                        where (element? F [klvm.push-error-handler
                                           klvm.pop-error-handler])
   F Args Return-reg Tail? C Acc -> (let X ((context-native C) [F | Args])
-                                     (walk-native' X Return-reg Tail? Acc)))
+                                     (walk-native' X Return-reg Tail? C Acc)))
 
 (define walk-x3
   [type X Type] C -> (do (warn-type)
