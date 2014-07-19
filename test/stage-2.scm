@@ -218,8 +218,7 @@
   (set-klvm-sp-top! vm 0))
 
 (define (klvm-fn-ref vm name)
-  (let ((fn (or (table-ref (klvm-fns vm) name #f)
-                (table-ref (klvm-closures vm) name #f))))
+  (let ((fn (table-ref (klvm-fns vm) name #f)))
     (if fn
         fn
         (error (mkstr name ": no such function")))))
@@ -353,6 +352,7 @@
           ((klvm.nargs) (klvm-nargs vm))
           ((klvm.func-obj) (func-obj expr func vm))
           ((klvm.closure-nargs) (length (klvm-closure-vars closure)))
+          ((klvm.lambda) (table-ref (klvm-closures vm) (cadr expr)))
           (else (error `(unexpected expr2 ,expr))))
         (case expr
           ((true) #t)

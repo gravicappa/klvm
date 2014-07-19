@@ -5,8 +5,7 @@
 
                   klvm.native klvm.reg klvm.reg-> klvm.call klvm.tailcall
                   klvm.tailif klvm.if klvm.return klvm.mk-closure
-                  klvm.push-error-handler
-                  klvm.pop-error-handler]
+                  klvm.push-error-handler klvm.pop-error-handler klvm.lambda]
 
 (defstruct context
   (func symbol)
@@ -151,7 +150,7 @@
        A (closure-args (protect A) 0 Nargs [])
        Fn (context-native C)
        . (context-toplevel-> C (walk-func regkl.closure F A Nregs Body Fn TL))
-    (mk-closure F Args Init Return-reg C Acc)))
+    (mk-closure [klvm.lambda F] Args Init Return-reg C Acc)))
 
 (define mk-args
   Args C -> (map (/. X (walk-x3 X C)) Args))
