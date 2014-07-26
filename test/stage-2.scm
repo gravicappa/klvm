@@ -55,6 +55,7 @@
 
 (define-record-type end-marker (mk-end-marker name) end-marker? (name))
 
+(define log-step? #t)
 (define log-to-repl? #f)
 (define log-to-file? #t)
 (define log-file "klvm.log")
@@ -78,6 +79,10 @@
            (display x port)
            (newline port))
          x))
+
+(define (err/pp x)
+  (log/pp x)
+  (pp x))
 
 (define (mkstr . args)
   (with-output-to-string '()
@@ -127,7 +132,9 @@
   (define (wrap fn)
     (lambda (eval-1 idx)
       (log/pp `(calling native ,name sp: ,(klvm-sp vm)
-                nargs: ,(klvm-nargs vm)))
+                nargs: ,(klvm-nargs vm)
+                arity: ,arity))
+      (set-klvm-sp-top! vm (+ (klvm-sp vm) arity))
       (let loop ((i 0)
                  (args '()))
         (cond ((< i (klvm-nargs vm))
@@ -139,15 +146,19 @@
                (cond ((< i arity)
                       (set-klvm-ret!
                        vm (mk-klvm-closure name arity (wrap func) args))
+                      (log/pp `(native sp-top: ,(klvm-sp-top vm)))
+                      (klvm-wipe vm 0)
                       (log/pp `((,name ,@args) => ,(klvm-ret vm)))
                       (klvm-next vm))
                      (#t
                       (with-exception-catcher
                         (lambda (e)
+                          (show-step vm #f "EXCEPTION")
                           (log/pp `((,name ,@args) => ,e))
                           e)
                         (lambda ()
                           (set-klvm-ret! vm (apply func args))
+                          (klvm-wipe vm 0)
                           (log/pp `((,name ,@args) => ,(klvm-ret vm)))
                           (klvm-next vm))))))))))
   (let ((fn (mk-klvm-closure name arity (wrap func) '())))
@@ -166,6 +177,8 @@
                            args)))
               (#t
                (log/pp `(calling primitive (,name ,@args)))
+               (set-klvm-sp-top! vm (+ (klvm-sp vm) i))
+               (klvm-wipe vm 0)
                (set-klvm-ret! vm (apply func args))
                (log/pp `((,name ,@args) => ,(klvm-ret vm)))
                (klvm-next vm))))))
@@ -209,7 +222,7 @@
 
 (define (clear-klvm-regs! vm)
   (do ((i 0 (+ i 1)))
-      ((>= i (klvm-sp-top vm)))
+      ((>= i (vector-length (klvm-regs vm))))
     (vector-set! (klvm-regs vm) i #f)))
 
 (define (reset-klvm! vm)
@@ -223,15 +236,17 @@
         fn
         (error (mkstr name ": no such function")))))
 
-(define (klvm-ensure-regs-size! vm n)
-  (let* ((nregs (vector-length (klvm-regs vm)))
-         (newsize (+ n (klvm-sp vm))))
-    (if (>= newsize nregs)
+(define (klvm-ensure-stack-size! vm size)
+  (let* ((nregs (vector-length (klvm-regs vm))))
+    (if (>= size nregs)
         (set-klvm-regs! vm (vector-append
                             (klvm-regs vm)
-                            (make-vector (- newsize nregs)))))
-    (if (>= newsize (klvm-sp-top vm))
-        (set-klvm-sp-top! vm newsize))))
+                            (make-vector (- size nregs)))))))
+
+(define (klvm-nregs-> vm n)
+  (let ((newsize (+ (klvm-sp vm) n)))
+    (klvm-ensure-stack-size! vm newsize)
+    (set-klvm-sp-top! vm newsize)))
 
 (define (number-of-labels labels)
   (let loop ((labels labels)
@@ -283,13 +298,14 @@
            (read-klvm (reverse code) vm)
            (loop (read) (cons obj code)))))))
 
-(define (klvm-entry func nargs)
+(define (klvm-entry vm func nargs)
   ;; Function entry template returned by (klvm.entry-template)
+  (set-klvm-sp-top! vm (+ (klvm-sp vm) (klvm-nargs vm)))
+  (log/pp `(entry top: ,(klvm-sp-top vm)))
   `((klvm.nargs-cond
      ,nargs
-     ((klvm.nregs-> (1))
-      (klvm.ret-> (klvm.func-obj ,func ,nargs ,func))
-      (klvm.wipe-stack)
+     ((klvm.ret-> (klvm.func-obj ,func ,nargs ,func))
+      (klvm.wipe 0)
       (klvm.goto-next))
      ((klvm.nargs- ,nargs))
      ((klvm.sp+ (klvm.nargs))
@@ -300,15 +316,14 @@
   ;; Function return template returned by (klvm.return-template)
   `((klvm.if-nargs>0
      ((klvm.closure-> ,x)
-      (klvm.nregs-> ((klvm.nargs) (klvm.closure-nargs)))
       (klvm.next-> (klvm.reg ,next))
-      (klvm.wipe-stack)
       (klvm.put-closure-args 0)
+      (klvm.wipe 0)
       (klvm.sp- (klvm.nargs))
       (klvm.call))
      ((klvm.ret-> ,x)
       (klvm.next-> (klvm.reg ,next))
-      (klvm.wipe-stack)
+      (klvm.wipe 0)
       (klvm.goto-next)))))
 
 (define (ensure-func func vm)
@@ -330,13 +345,39 @@
 
 (define (put-closure-args offset closure vm)
   (let ((nargs (length (klvm-closure-vars closure))))
-    (klvm-ensure-regs-size! vm (+ nargs offset))
+    (klvm-ensure-stack-size! vm (+ (klvm-sp vm) nargs offset))
     (let loop ((args (klvm-closure-vars closure))
                (i (+ (klvm-sp vm) offset)))
       (cond ((pair? args)
              (vector-set! (klvm-regs vm) i (car args))
              (loop (cdr args) (+ i 1)))
             (#t (set-klvm-nargs! vm (+ (klvm-nargs vm) nargs)))))))
+
+(define (klvm-wipe-1 vm start)
+  (let ((end (klvm-sp-top vm)))
+    (do ((i (+ (klvm-sp vm) start) (+ i 1)))
+        ((>= i end))
+      (vector-set! (klvm-regs vm) i #f))))
+
+(define (klvm-wipe-2 vm start)
+  (let ((end (klvm-sp-top vm))
+        (start (+ (klvm-sp vm) start)))
+    (log/pp `(wipe end: ,end))
+    (do ((i start (+ i 1)))
+        ((>= i end))
+      (vector-set! (klvm-regs vm) i #f))
+    (set-klvm-sp-top! vm start)))
+
+(define (klvm-wipe vm start)
+  (define log `(wipe sp: ,(klvm-sp vm) start: ,start
+                regs-len: ,(vector-length (klvm-regs vm))
+                regs: ,(subvector (klvm-regs vm)
+                                  (klvm-sp vm)
+                                  (vector-length (klvm-regs vm)))))
+  (klvm-wipe-2 vm start)
+  (log/pp `(,@log after: ,(subvector (klvm-regs vm)
+                                     (klvm-sp vm)
+                                     (vector-length (klvm-regs vm))))))
 
 (define (klvm-eval func label vm)
   (define closure #f)
@@ -365,7 +406,7 @@
           (log/pp `(eval-1 ,expr))
           (case (car expr)
             ((klvm.entry)
-             (eval-1 (append (klvm-entry (cadr expr) (caddr expr))
+             (eval-1 (append (klvm-entry vm (cadr expr) (caddr expr))
                              (cdr exprs))))
             ((klvm.return)
              (eval-1 (append (klvm-return (cadr expr) (caddr expr))
@@ -401,8 +442,7 @@
                 (put-closure-args (cadr expr) closure vm))
                ((klvm.ret->) (set-klvm-ret! vm (eval-2 (cadr expr))))
                ((klvm.nregs->)
-                (klvm-ensure-regs-size! vm (apply + (map eval-2
-                                                         (cadr expr)))))
+                (klvm-nregs-> vm (apply + (map eval-2 (cadr expr)))))
                ((klvm.reg->)
                 (vector-set! (klvm-regs vm)
                              (+ (klvm-sp vm) (cadr expr))
@@ -422,47 +462,53 @@
                 (set-klvm-nargs! vm (- (klvm-nargs vm) (eval-2 (cadr expr)))))
                ((klvm.closure->)
                 (set! closure (ensure-func (eval-2 (cadr expr)) vm)))
-               ((klvm.wipe-stack) #t)
+               ((klvm.wipe) (klvm-wipe vm (eval-2 (cadr expr))))
                (else (error `(unexpected ,expr))))
              (eval-1 (cdr exprs)))))
         #f))
   
   ((klvm-closure-code func) eval-1 label))
 
-(define (show-step vm pc)
+(define (show-step vm pc title)
   (define (str-pc pc)
     (if (and (pair? pc)
              (klvm-closure? (car pc))
              (klvm-closure-name (car pc)))
         (cons (klvm-closure-name (car pc)) (cdr pc))
         pc))
-  (log/puts "")
-  (log/puts "## STEP")
-  (log/pp `(cur: ,(str-pc pc)))
-  (log/pp `(nargs: ,(klvm-nargs vm)))
-  (log/pp `(sp: ,(klvm-sp vm)))
-  (log/pp `(ret: ,(klvm-ret vm)))
-  (log/pp `(next: ,(str-pc (klvm-next vm))))
-  (log/pp `(regs: ,(if #t
-                       (klvm-regs vm)
-                       (subvector (klvm-regs vm)
-                                  (klvm-sp vm)
-                                  (vector-length (klvm-regs vm)))))))
+  (cond (log-step?
+         (log/puts "")
+         (log/puts (mkstr "## " title))
+         (log/pp `(cur: ,(str-pc pc)))
+         (log/pp `(nargs: ,(klvm-nargs vm)))
+         (log/pp `(sp: ,(klvm-sp vm)))
+         (log/pp `(sp-top: ,(klvm-sp-top vm)))
+         (log/pp `(ret: ,(klvm-ret vm)))
+         (log/pp `(next: ,(str-pc (klvm-next vm))))
+         (log/pp `(regs: ,(if #t
+                              (klvm-regs vm)
+                              (subvector (klvm-regs vm)
+                                         (klvm-sp vm)
+                                         (vector-length
+                                          (klvm-regs vm)))))))))
 
 (define (klvm-run func label vm)
   (let loop ((next (cons func label)))
-    (show-step vm next)
+    (show-step vm next "STEP")
     (cond ((pair? next) (loop (klvm-eval (car next) (cdr next) vm)))
           ((not next) #t)
           ((end-marker? next) #t)
           (#t
            (log/pp `(exception: ,next))
            (log/pp `(handlers: ,(klvm-err-handlers vm)))
+           (log/pp `(sp: ,(klvm-sp vm)))
+           (log/pp `(sp-top: ,(klvm-sp-top vm)))
            (let ((e (pop-error-handler vm)))
              (cond ((klvm-error-handler? e)
                     (log/pp `(handler: ,e))
                     (set-klvm-sp! vm (klvm-error-handler-sp e))
                     (set-klvm-next! vm (klvm-error-handler-next e))
+                    (klvm-wipe vm 0)
                     (klvm-call* (klvm-error-handler-func e) (list next) vm)
                     (loop (cons (klvm-error-handler-func e) 0)))
                    (#t (error `(unhandled exception ,next)))))))))
@@ -480,8 +526,20 @@
         (nargs (length args)))
     (set-klvm-ret! vm #f)
     (set-klvm-nargs! vm (+ nargs (length (klvm-closure-vars fn))))
-    (klvm-ensure-regs-size! vm (klvm-nargs vm))
+    (klvm-nregs-> vm (klvm-nargs vm))
     (klvm-put-args (append (reverse args) (klvm-closure-vars fn)) vm)))
+
+(define (klvm-stack-empty? vm)
+  (let* ((regs (klvm-regs vm))
+         (n (vector-length regs)))
+    (let loop ((i (klvm-sp vm))
+               (ret #t))
+      (cond ((>= i n) ret)
+            ((vector-ref regs i)
+             (err/pp `(STACK IS NOT EMPTY i: ,i
+                       regs: , (subvector regs (klvm-sp vm) n)))
+             #f)
+            (#t (loop (+ i 1) ret))))))
 
 (define (klvm-call vm fn . args)
   (let ((fn (ensure-func fn vm))
@@ -491,65 +549,10 @@
     (set-klvm-next! vm (mk-end-marker "END"))
     (klvm-call* fn args vm)
     (klvm-run fn 0 vm)
-    (if (not (= old-sp (klvm-sp vm)))
-        (log/pp `(SP IS BROKEN: ,(klvm-sp vm) (expected: ,old-sp))))
+    (klvm-wipe vm 0)
+    (cond ((not (= old-sp (klvm-sp vm)))
+           (err/pp `(SP IS BROKEN: ,(klvm-sp vm) (expected: ,old-sp)))
+           (error 'sp-broken)))
+    (if (not (klvm-stack-empty? vm))
+        (error 'stack-not-empty))
     (klvm-ret vm)))
-
-(define (t1.setup)
-  (reset-klvm! *vm*)
-  (read-klvm-from-file "code.klvm2" *vm*))
-
-(define t1.defs
-  '((klvm-test.list-len ()) => 0
-    (klvm-test.list-len (1 2 3 4 a)) => 5
-    (klvm-test.test-call 9) => 23
-    (klvm-test.reversex ()) => ()
-    (klvm-test.reversex (1 2 3 4 5)) => (5 4 3 2 1)
-    (+ 7 8) => 15
-    (- 7 8) => -1
-    (klvm-test.test-partial) => 9
-    (klvm-test.test-closure) => 14
-    (klvm-test.test-closure-2) => (1 2 3 4 5)
-    (klvm-test.test-closure-3) => (1 2 3 4 5 klvm-test.a klvm-test.b)
-    (klvm-test.test-freeze) => 25
-    (klvm-test.test-closure-4) => 17
-    (klvm-test.test-closure-5) => 0
-    (klvm-test.test-map ()) => ()
-    (klvm-test.test-map (-1 2 -3 4 -5 6)) => (#f #t #f #t #f #t)
-    (klvm-test.incr-list (-1 2 -3 4 -5 6)) => (0 3 -2 5 -4 7)
-    (klvm-test.incr-list-aux (-1 2 -3 4 -5 6)) => (0 3 -2 5 -4 7)
-    (klvm-test.test-guard) => ((klvm-test.num 1)
-                               (klvm-test.sym klvm-test.two)
-                               (str "three")
-                               (str "four")
-                               (klvm-test.num 5)
-                               (klvm-test.sym klvm-test.six))
-    (klvm-test.test-do) => #(3 3 5 15)
-    (klvm-test.test-and #t #t) => #t
-    (klvm-test.test-and #t #f) => #f
-    (klvm-test.test-and #f #t) => #f
-    (klvm-test.test-and #f #f) => #f
-    (klvm-test.test-and-2 #t #t) => #t
-    (klvm-test.test-and-2 #t #f) => #f
-    (klvm-test.test-and-2 #f #t) => #f
-    (klvm-test.test-and-2 #f #f) => #f
-    (klvm-test.test-or #t #t) => #t
-    (klvm-test.test-or #f #t) => #t
-    (klvm-test.test-or #t #f) => #t
-    (klvm-test.test-or #f #f) => #f
-    (klvm-test.test-or-2 #t #t) => #t
-    (klvm-test.test-or-2 #f #t) => #t
-    (klvm-test.test-or-2 #t #f) => #t
-    (klvm-test.test-or-2 #f #f) => #f
-    (klvm-test.appendx (a b c) (2 3 4)) => (a b c 2 3 4)
-    (klvm-test.test-let-1 #t) => #(4 3 5 15 klvm-test.one)
-    (klvm-test.test-let-1 #f) => #(4 0 1 2 klvm-test.one)
-    (klvm-test.test-freeze-2) => 80
-    (klvm-test.test-trap-error) => 0
-    (klvm-test.test-trap-error-2) => 0
-    (klvm-test.test-trap-error-3) => 0
-    (klvm-test.test-trap-error-4) => 0))
-
-(define (t1)
-  (t1.setup)
-  (test t1.defs))
