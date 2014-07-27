@@ -18,6 +18,7 @@
 
 (defstruct context
   (func-name symbol)
+  (func-type symbol)
   (stack-size number)
   (stack-size-extra number)
   (nargs number)
@@ -82,10 +83,15 @@
                       [klvm.wipe [klvm.nargs]]
                       [klvm.call]])
 
+(define entry-func-name
+  Name klvm.s1.func -> Name
+  _ _ -> [])
+
 (define entry-op
-  Name Nargs -> (klvm.entry-template Name Nargs Name)
-                where (value inline-func-entry)
-  Name Nargs -> [klvm.entry Name Nargs Name])
+  Name Nargs Type -> (klvm.entry-template
+                      Name Nargs (entry-func-name Name Type))
+                     where (value inline-func-entry)
+  Name Nargs Type -> [klvm.entry Name Nargs (entry-func-name Name Type)])
 
 (define return-op
   X Next C -> (klvm.return-template X Next)
@@ -164,7 +170,8 @@
   klvm.s1.closure -> klvm.closure)
 
 (define func-entry
-  C -> (prepend [(entry-op (context-func-name C) (context-nargs C))
+  C -> (prepend [(entry-op (context-func-name C) (context-nargs C)
+                           (context-func-type C))
                  [klvm.nregs-> [(+ (context-stack-size C)
                                    (context-stack-size-extra C))]]
                  [klvm.reg-> (nargs-reg C) [klvm.nargs]]
@@ -174,7 +181,7 @@
 (define walk-toplevel-expr
   [Type Name Args Stack-size Stack-size-extra Code] Acc ->
   (let Nargs (length Args)
-       C (mk-context Name Stack-size Stack-size-extra Nargs -1 [] Acc)
+       C (mk-context Name Type Stack-size Stack-size-extra Nargs -1 [] Acc)
        X (func-entry C)
        X (walk-x1 Code C X)
        X (close-label C X)
