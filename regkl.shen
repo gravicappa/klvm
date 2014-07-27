@@ -76,11 +76,11 @@
 
 (define mk-set-reg
   X _ -> (error "Cannot set function argument~%") where (< X 0)
-  X V -> [set-reg! X V])
+  X V -> [reg-> X V])
 
 (define mk-get-reg
-  X -> [get-arg (- (- 0 X) 1)] where (< X 0)
-  X -> [get-reg X])
+  X -> [arg (- (- 0 X) 1)] where (< X 0)
+  X -> [reg X])
 
 (define reuse-idx
   X [] -> (fail)

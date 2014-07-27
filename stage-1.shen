@@ -1,5 +1,5 @@
 (package klvm.s1 [denest.walk klvm-dump klvm.omit-toplevel-constants?
-                  regkl.walk regkl.get-arg regkl.get-reg regkl.set-reg!
+                  regkl.walk regkl.arg regkl.reg regkl.reg->
                   regkl.closure regkl.func regkl.toplevel regkl.freeze
                   regkl.trap-error
 
@@ -171,8 +171,8 @@
 (define walk-x3
   [type X Type] C -> (do (warn-type)
                          (walk-x3 X C))
-  [regkl.get-reg R] C -> [klvm.reg (func-reg R C)]
-  [regkl.get-arg R] C -> [klvm.reg (func-arg R C)]
+  [regkl.reg R] C -> [klvm.reg (func-reg R C)]
+  [regkl.arg R] C -> [klvm.reg (func-arg R C)]
   X C -> X where (const? X)
   X _ -> (error "Unexpected L3 Reg-KLambda ~S." X))
 
@@ -192,10 +192,10 @@
   [regkl.freeze Nregs Init Body] Return-reg C Acc ->
     (walk-closure Return-reg [] Nregs (mk-args Init C) Body C Acc)
   
-  [regkl.get-reg R] Return-reg C Acc ->
+  [regkl.reg R] Return-reg C Acc ->
     [[klvm.reg-> Return-reg [klvm.reg (func-reg R C)]] | Acc]
   
-  [regkl.get-arg R] Return-reg C Acc ->
+  [regkl.arg R] Return-reg C Acc ->
     [[klvm.reg-> Return-reg [klvm.reg (func-arg R C)]] | Acc]
 
   [F | Args] Return-reg C Acc ->
@@ -211,10 +211,10 @@
                                [[Key [klvm.reg R] T' E'] | Acc]))
 
 (define walk-if
-  [regkl.get-reg R] Then Else Tail? C Acc ->
+  [regkl.reg R] Then Else Tail? C Acc ->
   (walk-if-reg (func-reg R C) Then Else Tail? C Acc)
 
-  [regkl.get-arg R] Then Else Tail? C Acc ->
+  [regkl.arg R] Then Else Tail? C Acc ->
   (walk-if-reg (func-arg R C) Then Else Tail? C Acc)
 
   X _ _ _ _ _ -> (error "Broken Reg-KLambda ~S." X))
@@ -235,18 +235,18 @@
 (define walk-x1
   [do | X] Do? Tail? C Acc -> (in-do (walk-do X Tail? C) Do? Acc)
   [if If Then Else] _ Tail? C Acc -> (walk-if If Then Else Tail? C Acc)
-  [regkl.get-reg R] _ true C Acc -> [[klvm.return [klvm.reg (func-reg R C)]
-                                                  (func-next-reg C)]
-                                     | Acc]
-  [regkl.get-reg _] _ false _ Acc -> Acc
-  [regkl.get-arg R] _ true C Acc -> [[klvm.return [klvm.reg (func-arg R C)]
-                                                  (func-next-reg C)]
-                                     | Acc]
-  [regkl.get-arg _] _ false _ Acc -> Acc
+  [regkl.reg R] _ true C Acc -> [[klvm.return [klvm.reg (func-reg R C)]
+                                              (func-next-reg C)]
+                                 | Acc]
+  [regkl.reg _] _ false _ Acc -> Acc
+  [regkl.arg R] _ true C Acc -> [[klvm.return [klvm.reg (func-arg R C)]
+                                              (func-next-reg C)]
+                                 | Acc]
+  [regkl.arg _] _ false _ Acc -> Acc
   [regkl.closure | _] _ false _ Acc ->  Acc
   [regkl.freeze | _ ] _ false _ Acc -> Acc
 
-  [regkl.set-reg! R X2] Do? false C Acc ->
+  [regkl.reg-> R X2] Do? false C Acc ->
   (in-do (walk-x2 X2 (func-reg R C) C) Do? Acc)
 
   [regkl.closure Args Nregs Init Body] Do? true C Acc ->
@@ -283,7 +283,7 @@
 (define walk-1
   [Type Name Args Nregs Body] Fn Toplevel -> 
   (walk-func Type Name Args Nregs Body Fn Toplevel)
-  where (element? Type [regkl.func regkl.toplevel regkl.closure])
+  where (element? Type [regkl.func regkl.toplevel])
   [X | Y] _ _ -> (error "Unexpected toplevel expression ~S~%" [X | Y])
   X Fn Toplevel -> (walk-func
                     regkl.toplevel (gensym toplevel) [] 0 X Fn Toplevel)
