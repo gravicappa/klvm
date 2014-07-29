@@ -264,7 +264,7 @@
             (#t v)))))
 
 (define (eval-fn body)
-  (let ((vec (put-labels-to-vector (cdr body))))
+  (let ((vec (put-labels-to-vector body)))
     (lambda (eval-1 idx) (eval-1 (vector-ref vec idx)))))
 
 (define (mk-func code)
@@ -392,7 +392,6 @@
           ((klvm.next) (klvm-next vm))
           ((klvm.nargs) (klvm-nargs vm))
           ((klvm.func-obj) (func-obj expr func vm))
-          ((klvm.closure-nargs) (length (klvm-closure-vars closure)))
           ((klvm.lambda) (table-ref (klvm-closures vm) (cadr expr)))
           (else (error `(unexpected expr2 ,expr))))
         (case expr

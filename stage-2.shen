@@ -2,11 +2,11 @@
                   
                   regkl.trap-error klvm.s2-from-kl
                   
-                  klvm.call klvm.closure klvm.closure-> klvm.closure-nargs
-                  klvm.entry klvm.func klvm.func-obj klvm.goto klvm.goto-next
-                  klvm.if klvm.if-nargs>0 klvm.labels klvm.nargs klvm.nargs-
-                  klvm.nargs-> klvm.nargs-cond klvm.next klvm.next->
-                  klvm.nregs-> klvm.pop-error-handler klvm.push-error-handler
+                  klvm.call klvm.closure klvm.closure-> klvm.entry klvm.func
+                  klvm.func-obj klvm.goto klvm.goto-next klvm.if
+                  klvm.if-nargs>0 klvm.nargs klvm.nargs- klvm.nargs->
+                  klvm.nargs-cond klvm.next klvm.next-> klvm.nregs->
+                  klvm.pop-error-handler klvm.push-error-handler
                   klvm.put-closure-args klvm.reg klvm.reg-> klvm.ret
                   klvm.ret-> klvm.return klvm.runtime klvm.sp+ klvm.sp-
                   klvm.tailcall klvm.tailif klvm.thaw klvm.toplevel klvm.wipe
@@ -187,7 +187,7 @@
        X (close-label C X)
        Acc' (context-toplevel C)
        Hdr (func-hdr Type)
-       Labels [klvm.labels | (reverse (context-func C))]
+       Labels (reverse (context-func C))
     [[Hdr Name Args Stack-size Labels] | Acc'])
   where (element? Type [klvm.s1.func klvm.s1.closure klvm.s1.toplevel]))
 

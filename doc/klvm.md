@@ -1,125 +1,250 @@
 # KLVM Description
 
-VM consists of
+Virtual machine for KLVM consists of
 
   - contiguous register vector `reg`,
   - stack pointer `sp`,
   - special register for passing argument number `nargs`,
+  - special register for passing a return value `ret`,
   - special register for passing code flow `next`,
   - special register for storing closure `t`,
-  - special register for storing sp `savesp`,
   - stack of error handlers.
 
-Logically registers `t` and `savesp` are local to label they are used in. So
-they can be implemented as local variables.
+Register `t` is local to block it is used in. So it can be implemented in
+target language as a local variable.
 
-## Calling a function
+## Example implementation
+
+KLVM virtual machine example (`test/stage-2.scm`) is implemented in [Gambit
+Scheme](http://gambitscheme.org). It is made for testing purposes and as a
+demonstration of KLVM principles. It is not an example of KLVM implementation
+itself since **KLVM IS NOT MEANT TO BE INTERPRETED** but translated to target
+language.
+
+## Concept of KLVM
+
+Let's first look at this KLambda:
+
+    (defun func1 (A B)
+      (let C (add A B)
+        (let D (sqrt C) \\ for simplicity I'm avoiding tailcall here
+          D)))
+
+KLVM transformation can be outlined with assembler-like pseudocode shown
+below. Also it demonstrate the usage of `nargs`, `next` and `ret` registers.
+
+    add.label0:
+      X <- arg1
+      Y <- arg1
+      ret <- (+ X Y)
+      goto next
+
+    sqrt.label0:
+      X <- arg1
+      ret <- (sqrt X)
+      goto next
+
+    func1.label0:
+      stack[i] <- next \\ saving 'next' register
+      A <- arg1
+      B <- arg2
+      nargs <- 2
+      arg1 <- A
+      arg2 <- B
+      next <- func1.label1 \\ after calling 'add' the execution will
+                           \\ continue at func1.label1
+      goto add.label0
+
+    func1.label1:
+      C <- ret
+      nargs <- 1
+      arg1 <- C
+      next <- func1.label2
+      goto sqrt.label0
+
+    func1.label2:
+      D <- ret \\ not omitted for clarity
+      ret <- D \\ ...
+      next <- stack[i]
+      goto next
+
+You can see that each function is divided into blocks (the code between
+labels) which can be (are) executed atomically. Each block has the information
+about next block to execute (`goto` in the sample).
+
+In [shen-py](https://github.com/gravicappa/shen-py) the simplified outline of
+that code with the main manager function `run` will look something like this:
+
+    def add_label0():
+      ...
+      ret = x + y
+      return next
+
+    def sqrt_label0():
+      ...
+      ret = math.sqrt(x)
+      return next
+
+    def func1_label0():
+      ...
+      return add_label0
+
+    def func1_label1():
+      ...
+      return sqrt_label0
+
+    def func1_label2():
+      ...
+      return next
+
+    def run(pc):
+      while pc:
+        pc = pc()
+
+### KLVM code concept
+
+    [toplevel-expression
+     [[0
+       [level-1-expression [level-2-expression ...]
+                           [level-2-expression ...]
+                           ...]
+       [level-1-expression [level-2-expression ...]
+                           [level-2-expression ...]
+                           ...]
+       [level-1-expression ...]]
+      [1
+       [level-1-expression [level-2-expression ...]
+                           [level-2-expression ...]
+                           ...]
+       [level-1-expression ...]]
+      ...]]
+
+Where toplevel-expression is a form defining a named function, unnamed
+function (which in KLVM still has an identifier), and a toplevel function.
+
+### Calling a function
 
 Parameters passed to function are put in `reg` **IN REVERSE** order. The
 number of parameters is stored in `nargs` and in `next` stored next label
 where VM jumps after calling function.
 
-## Structure of KLVM code
+## Forms
 
-    [toplevel-expression
-     [[klvm-label 0]
-      [level-1-expression
-       [level-2-expression ...]
-       ...]
-      [level-1-expression
-       [level-2-expression ...]
-       ...]
-      [level-1-expression ...]]
-     [[klvm-label N]
-      [level-1-expression ...]
-      [level-1-expression ...]]
-     ...]
+- klvm.func
+- klvm.toplevel 
+- klvm.closure 
 
-Operators:
+- klvm.call
+- klvm.closure->
+- klvm.entry
+- klvm.func-obj
+- klvm.goto
+- klvm.goto-next
+- klvm.if
+- klvm.if-nargs>0
+- klvm.lambda
+- klvm.nargs
+- klvm.nargs-
+- klvm.nargs->
+- klvm.nargs-cond
+- klvm.next
+- klvm.next->
+- klvm.nregs->
+- klvm.pop-error-handler
+- klvm.push-error-handler
+- klvm.put-closure-args
+- klvm.reg
+- klvm.reg->
+- klvm.ret
+- klvm.ret->
+- klvm.return
+- klvm.runtime
+- klvm.sp+
+- klvm.sp-
+- klvm.tailcall
+- klvm.tailif
+- klvm.thaw
+- klvm.wipe
 
-- klvm-func
-- klvm-closure
-- klvm-toplevel
-- klvm-return
-- klvm-goto
-- klvm-call
-- klvm-nargs->
-- klvm-nargs
-- klvm-inc-nargs
-- klvm-dec-nargs
-- klvm-nargs-cond
-- klvm-if-nargs>0
-- klvm-closure->
-- klvm-closure-func
-- klvm-closure-nargs
-- klvm-put-closure-args
-- klvm-wipe-stack
-- klvm-restore-stack-ptr
-- klvm-dec-stack-ptr
-- klvm-nregs->
-- klvm-current-error
-- klvm-label
-- klvm-if
-- klvm-inc-stack-ptr
-- klvm-save-stack-ptr
-- klvm-next->
-- klvm-next
-- klvm-reg->
-- klvm-reg
-- klvm-error-unwind-get-handler
-- klvm-pop-error-handler
-- klvm-push-error-handler
-- klvm-func-ptr
-- klvm-func-obj
+- klvm.entry-template
+- klvm.return-template
 
-### toplevel operations
+### Toplevel forms
 
-- klvm-closure
-- klvm-func
-- klvm-toplevel  
-- klvm-nargs->  
-- klvm-call
+- klvm.func
+- klvm.toplevel 
+- klvm.closure 
 
-`klvm-call` and `klvm-nargs->` are actually level 1 operations that can be in
-toplevel.
+### Level 1 forms
 
-#### level 1 operations
+- klvm.call
+- klvm.closure->
+- klvm.entry
+- klvm.goto
+- klvm.goto-next
+- klvm.if
+- klvm.if-nargs>0
+- klvm.nargs-
+- klvm.nargs->
+- klvm.nargs-cond
+- klvm.next->
+- klvm.nregs->
+- klvm.pop-error-handler
+- klvm.push-error-handler
+- klvm.put-closure-args
+- klvm.reg->
+- klvm.ret->
+- klvm.return
+- klvm.runtime
+- klvm.sp+
+- klvm.sp-
+- klvm.tailcall
+- klvm.tailif
+- klvm.thaw
+- klvm.wipe
 
-- klvm-return
-- klvm-goto
-- klvm-call
-- klvm-nargs->
-- klvm-inc-nargs
-- klvm-dec-nargs
-- klvm-nargs-cond
-- klvm-if-nargs>0
-- klvm-closure->
-- klvm-put-closure-args
-- klvm-nregs->
-- klvm-if
-- klvm-wipe-stack
-- klvm-inc-stack-ptr
-- klvm-dec-stack-ptr
-- klvm-save-stack-ptr
-- klvm-restore-stack-ptr
-- klvm-next->
-- klvm-reg->
-- klvm-push-error-handler
-- klvm-pop-error-handler
+#### [klvm.entry Func Arity Name]
 
-#### level 2 operations 
+### Level 2 forms 
 
-- klvm-closure-func
-- klvm-closure-nargs
-- klvm-func-obj
-- klvm-reg
-- klvm-nargs
-- klvm-next
-- klvm-func-ptr
+- klvm.reg
+- klvm.ret
+- klvm.next
+- klvm.nargs
+- klvm.func-obj
+- klvm.lambda
 - fail
 - *constant atoms*
 
-## KLVM operators
+#### [klvm.reg Index]
+
+Returns `reg[sp + Index]`.
+
+#### [klvm.ret]
+
+Returns the contents of `ret` register.
+
+#### [klvm.next]
+
+Returns the contents of `next` register.
+
+#### [klvm.nargs]
+
+Returns the contents of `nargs` register.
+
+#### [klvm.func-obj Func Arity Name]
+
+Creates and returns a function object of a function `Func` with `Arity` and
+name `Name`. A `Name` can be [] representing anonymous function.
+
+#### [klvm.lambda X]
+
+Represents a pointer to anonymous function created by `[klvm.closure X ...]`.
+It is introduced to detect the named function call from lambda call. In the
+latter case target language translator may use direct lambda object instead of
+making a function name lookup.
+
+################
 
 ### klvm-closure, klvm-func, klvm-toplevel
 
@@ -130,67 +255,60 @@ toplevel.
 Define a lambda, function or toplevel with name `Name`, number of parameters
 `Nargs`, number of used registers `Nregs` and code `Code`.
 
-The `Code` must have the following structure:
+The `Code` is expected to be `[...]` form which has the following
+structure:
 
-    [[[klvm-label 0]
-      ...]
-     [[klvm-label 1]
-      ...]
-     ...]
+    [[0 ...]
+     [1 ...]
+     [2 ...]
+     ...
+     [N ...]]
 
 The order of labels is not important but label 0 must exist.
 
-### klvm-label
-
-    [[klvm-label X]
-     ...
-     ...]
-
-Define label `X`.
-
 ### klvm-return
 
-    [klvm-return]
+[klvm-return]
 
 Return from current code block. VM will run code pointed by register `next`.
 See execution model.
 
 ### klvm-goto
 
-    [klvm-goto X]
+[klvm-goto X]
 
 Jump to label `X`.
 
 ### klvm-call
 
-    [klvm-call Funcptr]
+[klvm-call Funcptr]
 
 Jump to function defined by level 2 expression `Funcptr` that returns function
 pointer. Often occures with `klvm-closure-func` expression. 
 
-    [klvm-call [klvm-closure-func]]
+[klvm-call [klvm-closure-func]]
 
 ### klvm-nargs->
 
-    [klvm-nargs-> X]
+[klvm-nargs-> X]
 
 Sets the value to `nargs` register to `X`.
 
 ### klvm-inc-nargs
 
-    [klvm-inc-nargs Increment]
+[klvm-inc-nargs Increment]
 
 Increase the value of `nargs` register by `Increment`.
 
 ### klvm-dec-nargs
 
-    [klvm-dec-nargs Decrement]
+[klvm-dec-nargs Decrement]
 
 Decrease the value of `nargs` register by `Decrement`.
 
 ### klvm-nargs-cond
 
-    [klvm-nargs-cond Nargs A B C]
+[klvm-nargs-cond Nargs A B C]
 
 If the value of `Nargs` KLVM expression is less than number of function's
 parameters execute KLVM expression `A`. If the value of `nargs` register is
@@ -201,7 +319,7 @@ translated from `klvm-func-entry-tpl` template.
 
 ### klvm-if-nargs>0
 
-    [klvm-if-nargs>0 X Next A B]
+[klvm-if-nargs>0 X Next A B]
 
 If the value of `nargs` register > 0 execute KLVM expressions `A`, else
 execute `B`. Arguments `X` and `Next` are used if implementation chooses not
@@ -210,21 +328,21 @@ from `klvm-func-return-tpl` template.
 
 ### klvm-closure->
 
-    [klvm-closure-> Obj]
+[klvm-closure-> Obj]
 
 Store closure object defined by level 2 expression `Obj` in temporary register
 `t`.
 
 ### klvm-put-closure-args
 
-    [klvm-put-closure-args Off]
+[klvm-put-closure-args Off]
 
 Puts closure variables to registers vector starting from index `Off`.
 
 ### klvm-nregs->
 
-    [klvm-nregs-> [N]]
-    [klvm-nregs-> [N [klvm-closure-nargs]]]
+[klvm-nregs-> [N]]
+[klvm-nregs-> [N [klvm-closure-nargs]]]
 
 Ensure that the length of the registers vector if not less that `sp + N` or
 `sp + N + [klvm-closure-nargs]`. Otherwise either increase it or raise an
@@ -232,7 +350,7 @@ error.
 
 ### klvm-if
 
-    [klvm-if Cond-expr Then-expr Else-expr]
+[klvm-if Cond-expr Then-expr Else-expr]
 
 If the value of `Cond-expr` is true then execute `Then-expr` else execute
 `Else-expr`. `Cond-expr` is level 2 operation, `Then-expr` and `Else-expr` are
@@ -240,104 +358,104 @@ level 1 operations.
 
 ### klvm-wipe-stack
 
-    [klvm-wipe-stack Off]
+[klvm-wipe-stack Off]
 
 Clears registers vector from `sp + Off` till its top used index.
 
 ### klvm-inc-stack-ptr
 
-    [klvm-inc-stack-ptr Increment]
+[klvm-inc-stack-ptr Increment]
 
 Increase the value of `sp` register by `Increment`.
 
 ### klvm-dec-stack-ptr
 
-    [klvm-dec-stack-ptr Decrement]
+[klvm-dec-stack-ptr Decrement]
 
 Decreace the value of `sp` register by `Increment`.
 
 ### klvm-save-stack-ptr
-    
-    [klvm-save-stack-ptr]
+
+[klvm-save-stack-ptr]
 
 Stores `sp` in temporary register `savesp`.
 
 ### klvm-restore-stack-ptr
 
-    [klvm-restore-stack-ptr]
+[klvm-restore-stack-ptr]
 
 Restores `sp` from temporary register `savesp`.
 
 ### klvm-next->
 
-    [klvm-next-> X]
+[klvm-next-> X]
 
 Sets the contents of the `next` register with the pointer to label `X` code.
 
 ### klvm-reg->
 
-    [klvm-reg-> X V]
+[klvm-reg-> X V]
 
 Set the value `V` to register number `sp + X`.
 
 ### klvm-push-error-handler
 
-    [klvm-push-error-handler E]
+[klvm-push-error-handler E]
 
 Push error handler `E`, `sp`, `nargs`, `next` registers into error handlers
 stack.
 
 ### klvm-pop-error-handler
 
-    [klvm-pop-error-handler]
+[klvm-pop-error-handler]
 
 Pop top element from error handlers stack.
 
 ### klvm-closure-func
 
-    [klvm-closure-func]
+[klvm-closure-func]
 
 Return pointer to function of closure in temporary register `t`.
 
 ### klvm-closure-nargs
 
-    [klvm-closure-nargs]
+[klvm-closure-nargs]
 
 Return number of arguments closure in temporary register `t`.
 
 ### klvm-func-obj
 
-    [klvm-func-obj]
+[klvm-func-obj]
 
 Return current function object.
 
 ### klvm-reg
 
-    [klvm-reg X]
+[klvm-reg X]
 
 Return the contents of register number `sp + X`.
 
 ### klvm-nargs
 
-    [klvm-nargs]
+[klvm-nargs]
 
 Return the value of `nargs` register.
 
 ### klvm-next
 
-    [klvm-next]
+[klvm-next]
 
 Return the value of `next` register.
 
 ### klvm-func-ptr
 
-    [klvm-func-ptr F]
+[klvm-func-ptr F]
 
 Return func pointer of a function with name `F`, where `F` is a symbol.
 
 ### fail
 
-    [fail]
+[fail]
 
 Return fail object.
 
@@ -345,33 +463,33 @@ Return fail object.
 
 Scheme-like pseudocode:
 
-    (define (run-loop-aux x)
-      (if (procedure? x)
-          (run-loop-aux x)
-          #f))
+  (define (run-loop-aux x)
+    (if (procedure? x)
+        (run-loop-aux x)
+        #f))
 
-    (define (run-loop x)
-      (if (procedure? x)
-          (run-loop (with-exception-handler
-                     (lambda () (run-loop-aux x))
-                     (lambda (e)
-                       (let ((eh (klvm-pop-error-handler)))
-                         (klvm-closure-> (error-handler-fn eh))
-                         (klvm-nargs 1)
-                         (klvm-reg-size (+ 1 (klvm-closure-nargs)))
-                         (klvm-reg 0 e)
-                         (klvm-put-closure-args 1)
-                         eh))))
-          #f))
+  (define (run-loop x)
+    (if (procedure? x)
+        (run-loop (with-exception-handler
+                    (lambda () (run-loop-aux x))
+                    (lambda (e)
+                      (let ((eh (klvm-pop-error-handler)))
+                        (klvm-closure-> (error-handler-fn eh))
+                        (klvm-nargs 1)
+                        (klvm-reg-size (+ 1 (klvm-closure-nargs)))
+                        (klvm-reg 0 e)
+                        (klvm-put-closure-args 1)
+                        eh))))
+        #f))
 
 ## Exception handling
 
 KLVM translates
 
-    [trap-error X [lambda E Y]]
+[trap-error X [lambda E Y]]
 
 to
-    [klvm-trap-error [freeze X] [lambda E Y]]
+[klvm-trap-error [freeze X] [lambda E Y]]
 
 Where `klvm-trap-error` definition is provided by `klvm-runtime` function.
 
@@ -379,7 +497,7 @@ Where `klvm-trap-error` definition is provided by `klvm-runtime` function.
 
 ### klvm-mk-closure
 
-    [klvm-mk-closure Function Args]
+[klvm-mk-closure Function Args]
 
 This function must exists in KLVM-based Shen. It creates closure object with
 function pointer `Function`, and closure variables with values `Args`.
@@ -387,103 +505,9 @@ function pointer `Function`, and closure variables with values `Args`.
 ## Sample
 #### KLambda:
 
-    [defun list-len-aux [List Acc]
-      [if [cons? List]
-          [list-len-aux [tl List] [+ Acc 1]]
-          Acc]]
+[defun list-len-aux [List Acc]
+  [if [cons? List]
+      [list-len-aux [tl List] [+ Acc 1]]
+      Acc]]
 
 #### KLVM:
-
-    [klvm-func list-len-aux [List Acc] 2
-     [[klvm-label 0]
-      [klvm-nargs-cond
-       2
-       [[klvm-nregs-> [1]]
-        [klvm-reg-> 0 [klvm-func-obj list-len-aux 2]]
-        [klvm-wipe-stack 1]
-        [klvm-return [klvm-next]]]
-       [[klvm-dec-nargs 2]]
-       [[klvm-inc-stack-ptr [klvm-nargs]]
-        [klvm-dec-stack-ptr 2]
-        [klvm-dec-nargs 2]]]
-      [klvm-nregs-> [6]]
-      [klvm-reg-> 4 [klvm-nargs]]
-      [klvm-reg-> 5 [klvm-next]]
-      [klvm-closure-> cons?]
-      [klvm-next-> 1]
-      [klvm-nregs-> [7 [klvm-closure-nargs]]]
-      [klvm-nargs-> 1]
-      [klvm-reg-> 6 [klvm-reg 1]]
-      [klvm-put-closure-args 6]
-      [klvm-inc-stack-ptr 6]
-      [klvm-inc-nargs [klvm-closure-nargs]]
-      [klvm-call [klvm-closure-func]]]
-     [[klvm-label 1]
-      [klvm-dec-stack-ptr 6]
-      [klvm-reg-> 2 [klvm-reg 6]]
-      [klvm-wipe-stack 6]
-      [klvm-goto 2]]
-     [[klvm-label 4]
-      [klvm-closure-> tl]
-      [klvm-next-> 5]
-      [klvm-nregs-> [7 [klvm-closure-nargs]]]
-      [klvm-nargs-> 1]
-      [klvm-reg-> 6 [klvm-reg 1]]
-      [klvm-put-closure-args 6]
-      [klvm-inc-stack-ptr 6]
-      [klvm-inc-nargs [klvm-closure-nargs]]
-      [klvm-call [klvm-closure-func]]]
-     [[klvm-label 5]
-      [klvm-dec-stack-ptr 6]
-      [klvm-reg-> 2 [klvm-reg 6]]
-      [klvm-wipe-stack 6]
-      [klvm-closure-> +]
-      [klvm-next-> 6]
-      [klvm-nregs-> [8 [klvm-closure-nargs]]]
-      [klvm-nargs-> 2]
-      [klvm-reg-> 6 1]
-      [klvm-reg-> 7 [klvm-reg 0]]
-      [klvm-put-closure-args 6]
-      [klvm-inc-stack-ptr 6]
-      [klvm-inc-nargs [klvm-closure-nargs]]
-      [klvm-call [klvm-closure-func]]]
-     [[klvm-label 6]
-      [klvm-dec-stack-ptr 6]
-      [klvm-reg-> 3 [klvm-reg 6]]
-      [klvm-wipe-stack 6]
-      [klvm-closure-> list-len-aux]
-      [klvm-nargs-> [klvm-reg 4]]
-      [klvm-dec-stack-ptr [klvm-nargs]]
-      [klvm-save-stack-ptr]
-      [klvm-inc-stack-ptr [klvm-nargs]]
-      [klvm-next-> [klvm-reg 5]]
-      [klvm-nargs-> 2]
-      [klvm-inc-nargs [klvm-reg 4]]
-      [klvm-nregs-> [2]]
-      [klvm-reg-> 0 [klvm-reg 3]]
-      [klvm-reg-> 1 [klvm-reg 2]]
-      [klvm-nregs-> [2 [klvm-closure-nargs]]]
-      [klvm-put-closure-args 0]
-      [klvm-inc-nargs [klvm-closure-nargs]]
-      [klvm-restore-stack-ptr]
-      [klvm-call [klvm-closure-func]]]
-     [[klvm-label 7]
-      [klvm-nargs-> [klvm-reg 4]]
-      [klvm-if-nargs>0
-       [klvm-reg 0]
-       [klvm-reg 5]
-       [[klvm-closure-> [klvm-reg 0]]
-        [klvm-nregs-> [[klvm-nargs] [klvm-closure-nargs]]]
-        [klvm-next-> [klvm-reg 5]]
-        [klvm-wipe-stack 0]
-        [klvm-put-closure-args 0]
-        [klvm-dec-stack-ptr [klvm-nargs]]
-        [klvm-call [klvm-closure-func]]]
-       [[klvm-reg-> 0 [klvm-reg 0]]
-        [klvm-next-> [klvm-reg 5]]
-        [klvm-wipe-stack 1]
-        [klvm-return [klvm-next]]]]]
-     [[klvm-label 2]
-      [klvm-if [klvm-reg 2]
-               [klvm-goto 4]
-               [klvm-goto 7]]]]

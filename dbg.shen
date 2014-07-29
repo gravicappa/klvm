@@ -1,24 +1,24 @@
-(package klvm.dbg [klvm.func klvm.closure klvm.toplevel klvm.labels]
+(package klvm.dbg [klvm.func klvm.closure klvm.toplevel]
 
 (define pp-code
   [] Out Sep -> true
   [X | Y] Out Sep -> (do (pr (make-string "~A~R" Sep X) Out)
-                         (pp-code Y Out (make-string "~%      "))))
+                         (pp-code Y Out (make-string "~%    "))))
 
 (define pp-label
-  [N | Code] Out Sep -> (do (pr (make-string "    c#40;~A~%" N) Out)
-                            (pp-code Code Out (make-string "      "))
-                            (pr (make-string "c#41;~A" Sep) Out)))
+  [N | Code] Out Sep -> (do (pr (make-string "~Ac#40;~A~%" Sep N) Out)
+                            (pp-code Code Out "    ")
+                            (pr "c#41;" Out)))
 
 (define pp-labels'
-  [[N | X]] Out -> (pp-label [N | X] Out "")
-  [[N | X] | Labels] Out -> (do (pp-label [N | X] Out (make-string "~%"))
-                                (pp-labels' Labels Out)))
+  [[N | X]] Out Sep -> (pp-label [N | X] Out Sep)
+  [[N | X] | Labels] Out Sep -> (let Sep' (make-string "~%   ")
+                                     . (pp-label [N | X] Out Sep)
+                                  (pp-labels' Labels Out Sep')))
 
 (define pp-labels
-  [klvm.labels | X] Out -> (do (pr (make-string "  c#40;klvm.labels~%") Out)
-                               (pp-labels' X Out)
-                               (pr (make-string "c#41;") Out)))
+  X Out -> (do (pp-labels' X Out "  c#40;")
+               (pr "c#41;" Out)))
 
 (define pretty-print-klvm
   [] Out -> (do (pr "c#10;" Out)
