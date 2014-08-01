@@ -13,7 +13,9 @@ Virtual machine for KLVM consists of
 Register `t` is local to block it is used in. So it can be implemented in
 target language as a local variable.
 
-## Example implementation
+## Concept of KLVM
+
+### Example implementation
 
 KLVM virtual machine example (`test/stage-2.scm`) is implemented in [Gambit
 Scheme](http://gambitscheme.org). It is made for testing purposes and as a
@@ -21,9 +23,10 @@ demonstration of KLVM principles. It is not an example of KLVM implementation
 itself since **KLVM IS NOT MEANT TO BE INTERPRETED** but translated to target
 language.
 
-## Concept of KLVM
 
-Let's first look at this KLambda:
+### Execution flow
+
+Let's first look at this KLambda code:
 
     (defun func1 (A B)
       (let C (add A B)
@@ -33,26 +36,14 @@ Let's first look at this KLambda:
 KLVM transformation can be outlined with assembler-like pseudocode shown
 below. Also it demonstrate the usage of `nargs`, `next` and `ret` registers.
 
-    add.label0:
-      X <- arg1
-      Y <- arg1
-      ret <- (+ X Y)
-      goto next
-
-    sqrt.label0:
-      X <- arg1
-      ret <- (sqrt X)
-      goto next
-
     func1.label0:
-      stack[i] <- next \\ saving 'next' register
+      stack[i] <- next
       A <- arg1
       B <- arg2
       nargs <- 2
       arg1 <- A
       arg2 <- B
-      next <- func1.label1 \\ after calling 'add' the execution will
-                           \\ continue at func1.label1
+      next <- func1.label1
       goto add.label0
 
     func1.label1:
@@ -68,9 +59,19 @@ below. Also it demonstrate the usage of `nargs`, `next` and `ret` registers.
       next <- stack[i]
       goto next
 
+    add.label0:
+      X <- arg1
+      Y <- arg2
+      ret <- (+ X Y)
+      goto next
+
+    sqrt.label0:
+      X <- arg1
+      ret <- (sqrt X)
+      goto next
+
 You can see that each function is divided into blocks (the code between
-labels) which can be (are) executed atomically. Each block has the information
-about next block to execute (`goto` in the sample).
+labels) which are meant to be executed atomically.
 
 In [shen-py](https://github.com/gravicappa/shen-py) the simplified outline of
 that code with the main manager function `run` will look something like this:
@@ -101,6 +102,18 @@ that code with the main manager function `run` will look something like this:
       while pc:
         pc = pc()
 
+### Processing function arguments and local variables
+
+The structure of a function's frame which is the part of `reg` vector where
+arguments and the local variables of the function are stored looks like this:
+
+    [... ArgN ... Arg1 Var1 ... VarN Stored-next Stored-nargs ...]
+         ↑                                                    ↑
+         sp                                                   sp + func's stacksize
+
+Please note that parameters passed to function are put in `reg` **IN REVERSE**
+order. This simplifies partial application support.
+
 ### KLVM code concept
 
     [toplevel-expression
@@ -121,12 +134,6 @@ that code with the main manager function `run` will look something like this:
 
 Where toplevel-expression is a form defining a named function, unnamed
 function (which in KLVM still has an identifier), and a toplevel function.
-
-### Calling a function
-
-Parameters passed to function are put in `reg` **IN REVERSE** order. The
-number of parameters is stored in `nargs` and in `next` stored next label
-where VM jumps after calling function.
 
 ## Forms
 
