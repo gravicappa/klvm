@@ -172,8 +172,8 @@
 (define func-entry
   C -> (prepend [(entry-op (context-func-name C) (context-nargs C)
                            (context-func-type C))
-                 [klvm.nregs-> [(+ (context-stack-size C)
-                                   (context-stack-size-extra C))]]
+                 [klvm.nregs-> (+ (context-stack-size C)
+                                  (context-stack-size-extra C))]
                  [klvm.reg-> (nargs-reg C) [klvm.nargs]]
                  [klvm.reg-> (next-reg C) [klvm.next]]]
                 (label (next-label C) C [])))

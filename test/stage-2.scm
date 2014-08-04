@@ -432,6 +432,12 @@
              (if (> (klvm-nargs vm) 0)
                  (eval-1 (append (cadr expr) (cdr exprs)))
                  (eval-1 (append (caddr expr) (cdr exprs)))))
+            ((klvm.closure->)
+             (with-exception-catcher
+               (lambda (e) e)
+               (lambda ()
+                 (set! closure (ensure-func (eval-2 (cadr expr)) vm))
+                 (eval-1 (cdr exprs)))))
             (else
              (case (car expr)
                ((klvm.push-error-handler)
@@ -440,8 +446,7 @@
                ((klvm.put-closure-args)
                 (put-closure-args (cadr expr) closure vm))
                ((klvm.ret->) (set-klvm-ret! vm (eval-2 (cadr expr))))
-               ((klvm.nregs->)
-                (klvm-nregs-> vm (apply + (map eval-2 (cadr expr)))))
+               ((klvm.nregs->) (klvm-nregs-> vm (eval-2 (cadr expr))))
                ((klvm.reg->)
                 (vector-set! (klvm-regs vm)
                              (+ (klvm-sp vm) (cadr expr))
@@ -459,13 +464,11 @@
                 (set-klvm-nargs! vm (+ (klvm-nargs vm) (eval-2 (cadr expr)))))
                ((klvm.nargs-)
                 (set-klvm-nargs! vm (- (klvm-nargs vm) (eval-2 (cadr expr)))))
-               ((klvm.closure->)
-                (set! closure (ensure-func (eval-2 (cadr expr)) vm)))
                ((klvm.wipe) (klvm-wipe vm (eval-2 (cadr expr))))
                (else (error `(unexpected ,expr))))
              (eval-1 (cdr exprs)))))
         #f))
-  
+
   ((klvm-closure-code func) eval-1 label))
 
 (define (show-step vm pc title)
