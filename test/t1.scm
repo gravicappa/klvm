@@ -1,5 +1,5 @@
 (define (t1.setup)
-  (reset-klvm! *vm*)
+  (reset-vm! *vm*)
   (read-klvm-from-file "code.klvm2" *vm*))
 
 (define t1.defs
@@ -56,4 +56,4 @@
 (define (t1)
   (clear-log)
   (t1.setup)
-  (test t1.defs))
+  (test klvm-expr t1.defs))

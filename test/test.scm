@@ -25,22 +25,22 @@
     (set! *test-results* (cons obj *test-results*))
     (eq? result #t)))
 
-(define (run-test expr expected)
+(define (run-test fn expr expected)
   (define (strerr e)
     (with-output-to-string '() (lambda () (display-exception e))))
   (with-exception-catcher
     (lambda (e) (add-test-result! (cons expr expected) (strerr e)))
     (lambda ()
-      (let* ((ret (apply klvm-call *vm* (car expr) (cdr expr)))
+      (let* ((ret (fn expr))
              (result (if (equal? ret expected)
                          #t
                          (mkstr "ERROR: " ret " != " expected))))
         (add-test-result! (cons expr ret) result)))))
 
-(define (run-test-exprs defs)
+(define (run-test-exprs fn defs)
   (let loop ((defs defs))
     (cond ((not (pair? defs)))
-          ((run-test (car defs) (caddr defs)) (loop (cdddr defs)))
+          ((run-test fn (car defs) (caddr defs)) (loop (cdddr defs)))
           ((not abort-test-on-error?) (loop (cdddr defs))))))
 
 (define (show-test-results results)
@@ -66,7 +66,7 @@
            (display (mkstr "         " nerrors " errors"))
            (newline)))))
 
-(define (test defs)
+(define (test fn defs)
   (reset-tests!)
-  (run-test-exprs defs)
+  (run-test-exprs fn defs)
   (show-test-results *test-results*))

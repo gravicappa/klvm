@@ -114,7 +114,9 @@ arguments and the local variables of the function are stored looks like this:
 Please note that parameters passed to function are put in `reg` **IN REVERSE**
 order. This simplifies partial application support.
 
-### KLVM code concept
+### KLVM code
+
+KLVM code has simple structure:
 
     [toplevel-expression
      [[0
@@ -132,7 +134,7 @@ order. This simplifies partial application support.
        [level-1-expression ...]]
       ...]]
 
-Where toplevel-expression is a form defining a named function, unnamed
+Where toplevel-expression is a form defining a named function, an unnamed
 function (which in KLVM still has an identifier), and a toplevel function.
 
 ## Forms

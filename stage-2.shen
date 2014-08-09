@@ -127,8 +127,7 @@
                           (prepend (tailcall-template Nargs S) Acc)))
 
 (define walk-if-expr
-  X X-label _ true C Acc -> (let L (label X-label C Acc)
-                              (walk-x1 X C L))
+  X X-label _ true C Acc -> (walk-x1 X C (label X-label C Acc))
   X X-label After-label false C Acc -> (let L (label X-label C Acc)
                                             Acc (walk-x1 X C L)
                                          [[klvm.goto After-label] | Acc]))

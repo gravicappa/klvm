@@ -1,4 +1,6 @@
+(load "dbg")
 (load "test")
+(load "vm")
 (load "stage-2")
 (load "py")
 (load "js")
