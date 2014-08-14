@@ -5,8 +5,8 @@
                   klvm.call klvm.closure klvm.closure-> klvm.entry klvm.func
                   klvm.func-obj klvm.goto klvm.goto-next klvm.if
                   klvm.if-nargs>0 klvm.nargs klvm.nargs- klvm.nargs->
-                  klvm.nargs-cond klvm.next klvm.next-> klvm.nregs->
-                  klvm.pop-error-handler klvm.push-error-handler
+                  klvm.nargs+ klvm.nargs-cond klvm.next klvm.next->
+                  klvm.nregs-> klvm.pop-error-handler klvm.push-error-handler
                   klvm.put-closure-args klvm.reg klvm.reg-> klvm.ret
                   klvm.ret-> klvm.return klvm.runtime klvm.sp+ klvm.sp-
                   klvm.tailcall klvm.tailif klvm.thaw klvm.toplevel klvm.wipe
@@ -62,9 +62,9 @@
   X Next -> [klvm.if-nargs>0
              [[klvm.closure-> X]
               [klvm.next-> Next]
-              [klvm.put-closure-args 0]
-              [klvm.wipe 0]
               [klvm.sp- [klvm.nargs]]
+              [klvm.put-closure-args]
+              [klvm.wipe [klvm.nargs]]
               [klvm.call]]
              [[klvm.ret-> X]
               [klvm.next-> Next]
@@ -74,14 +74,15 @@
 (define call-template
   Nargs S+ -> [[klvm.sp+ S+]
                [klvm.nargs-> Nargs]
-               [klvm.put-closure-args Nargs]
+               [klvm.put-closure-args]
                [klvm.call]])
 
 (define tailcall-template
-  Nargs Framesize -> [[klvm.nargs-> Nargs]
-                      [klvm.put-closure-args Nargs]
-                      [klvm.wipe [klvm.nargs]]
-                      [klvm.call]])
+  Nargs Framesize C -> [[klvm.sp- [klvm.nargs]]
+                        [klvm.nargs+ Nargs]
+                        [klvm.put-closure-args]
+                        [klvm.wipe [klvm.nargs]]
+                        [klvm.call]])
 
 (define entry-func-name
   Name klvm.s1.func -> Name
@@ -121,10 +122,12 @@
 (define walk-tailcall
   F Nargs Prep C Acc -> (let Acc [[klvm.next-> [klvm.reg (next-reg C)]] | Acc]
                              Acc [[klvm.closure-> F] | Acc]
+                             Acc [[klvm.nargs-> [klvm.reg (nargs-reg C)]]
+                                  | Acc]
                              Acc (prepare-args Prep C Acc)
                              S (+ (context-stack-size C)
                                   (context-stack-size-extra C))
-                          (prepend (tailcall-template Nargs S) Acc)))
+                          (prepend (tailcall-template Nargs S C) Acc)))
 
 (define walk-if-expr
   X X-label _ true C Acc -> (walk-x1 X C (label X-label C Acc))
@@ -161,6 +164,7 @@
                                   [(return-op X Next C) | Acc'])
   [klvm.push-error-handler E] C Acc -> [[klvm.push-error-handler E] | Acc]
   [klvm.pop-error-handler] C Acc -> [[klvm.pop-error-handler] | Acc]
+  [klvm.native X] C Acc -> [[klvm.native X] | Acc]
   X _ _ -> (error "Unexpected L1 expression: ~S~%" X))
 
 (define func-hdr

@@ -1,6 +1,10 @@
-(define (t1.setup)
-  (reset-vm! *vm*)
-  (read-klvm-from-file "code.klvm2" *vm*))
+(define (t1.klvm.setup)
+  (reset-vm! *klvm*)
+  (read-klvm-from-file "code.klvm2" *klvm*))
+
+(define (t1.klvmasm.setup)
+  (reset-vm! *klvmasm*)
+  (read-klvmasm-from-file "code.aklvm" *klvmasm*))
 
 (define t1.defs
   '((klvm-test.list-len ()) => 0
@@ -11,6 +15,8 @@
     (+ 7 8) => 15
     (- 7 8) => -1
     (klvm-test.test-partial) => 9
+    (klvm-test.test-partial-2) => 30
+    (klvm-test.test-partial-3) => 30
     (klvm-test.test-closure) => 14
     (klvm-test.test-closure-2) => (1 2 3 4 5)
     (klvm-test.test-closure-3) => (1 2 3 4 5 klvm-test.a klvm-test.b)
@@ -53,7 +59,7 @@
     (klvm-test.test-trap-error-3) => 0
     (klvm-test.test-trap-error-4) => 0))
 
-(define (t1)
+(define (t1.klvm)
   (clear-log)
-  (t1.setup)
+  (t1.klvm.setup)
   (test klvm-expr t1.defs))

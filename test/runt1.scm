@@ -2,6 +2,7 @@
 (load "test")
 (load "vm")
 (load "stage-2")
+(load "klvmasm")
 (load "py")
 (load "js")
 (load "t1")

@@ -71,6 +71,12 @@
         (loop (cdr lst) (mkstr ret s (car lst)) sep)
         ret)))
 
+(define (vm-regs-ref vm reg)
+  (vector-ref (vm-regs vm) (+ (vm-sp vm) reg)))
+
+(define (vm-regs-set! vm reg x)
+  (vector-set! (vm-regs vm) (+ (vm-sp vm) reg) x))
+
 (define (vm-add-func! func vm)
   (let ((prev (table-ref (vm-fns vm) (vm-closure-name func) #f)))
     (cond ((vm-closure? prev)
@@ -119,9 +125,7 @@
       (let loop ((i 0)
                  (args '()))
         (cond ((< i (vm-nargs vm))
-               (loop (+ i 1)
-                     (cons (vector-ref (vm-regs vm) (+ (vm-sp vm) i))
-                           args)))
+               (loop (+ i 1) (cons (vm-regs-ref vm i) args)))
               (#t
                (log/pp `(calling native (,name ,@args)))
                (cond ((< i arity)
@@ -153,9 +157,7 @@
       (let loop ((i 0)
                  (args '()))
         (cond ((< i (vm-nargs vm))
-               (loop (+ i 1)
-                     (cons (vector-ref (vm-regs vm) (+ (vm-sp vm) i))
-                           args)))
+               (loop (+ i 1) (cons (vm-regs-ref vm i) args)))
               (#t
                (log/pp `(calling primitive (,name ,@args)))
                (set-vm-sp-top! vm (+ (vm-sp vm) i))
@@ -267,7 +269,7 @@
         (old-sp (vm-sp vm)))
     (set-vm-sp-top! vm (vm-sp vm))
     (set-vm-next! vm (mk-vm-end-marker "END"))
-    (klvm-call* (car expr) (cdr expr) vm)
+    (vm-call* (car expr) (cdr expr) vm)
     (run expr vm)
     (vm-wipe vm 0)
     (cond ((not (= old-sp (vm-sp vm)))
@@ -288,3 +290,4 @@
                        regs: , (subvector regs (vm-sp vm) n)))
              #f)
             (#t (loop (+ i 1) ret))))))
+
