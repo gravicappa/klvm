@@ -31,7 +31,6 @@
 
 (define func-reg X C -> (+ (context-nargs C) X))
 (define func-arg X C -> (- (context-nargs C) (+ X 1)))
-(define func-next-reg C -> (- (context-stack-size C) 1))
 
 (define upd-context-stack-size-extra
   N C -> (context-stack-size-extra-> C N)
@@ -159,7 +158,7 @@
   X _ _ C _ -> X where (= X (fail))
   X [] false C Acc -> [[klvm.native X] | Acc]
   X Return-reg false C Acc -> [[klvm.reg-> Return-reg [klvm.native X]] | Acc]
-  X _ true C Acc -> [[klvm.return [klvm.native X] (func-next-reg C)] | Acc])
+  X _ true C Acc -> [[klvm.return [klvm.native X]] | Acc])
 
 (define walk-native
   F Args [] _ C Acc -> [[F | Args] | Acc]
@@ -235,12 +234,10 @@
 (define walk-x1
   [do | X] Do? Tail? C Acc -> (in-do (walk-do X Tail? C) Do? Acc)
   [if If Then Else] _ Tail? C Acc -> (walk-if If Then Else Tail? C Acc)
-  [regkl.reg R] _ true C Acc -> [[klvm.return [klvm.reg (func-reg R C)]
-                                              (func-next-reg C)]
+  [regkl.reg R] _ true C Acc -> [[klvm.return [klvm.reg (func-reg R C)]]
                                  | Acc]
   [regkl.reg _] _ false _ Acc -> Acc
-  [regkl.arg R] _ true C Acc -> [[klvm.return [klvm.reg (func-arg R C)]
-                                              (func-next-reg C)]
+  [regkl.arg R] _ true C Acc -> [[klvm.return [klvm.reg (func-arg R C)]]
                                  | Acc]
   [regkl.arg _] _ false _ Acc -> Acc
   [regkl.closure | _] _ false _ Acc ->  Acc
@@ -259,7 +256,7 @@
   (in-do (walk-apply (mk-args [F | Args] C) [] Tail? C) Do? Acc)
 
   _ _ false _ Acc -> Acc
-  X _ true C Acc -> [[klvm.return X (func-next-reg C)] | Acc]
+  X _ true C Acc -> [[klvm.return X] | Acc]
   X _ _ _ _ -> (error "Unexpected L1 Reg-KLambda expression ~S" X))
 
 (define func-code

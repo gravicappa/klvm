@@ -48,15 +48,15 @@
                  [N]))
 
 (define klvm.entry-template
-  Func Nargs Name -> [klvm.nargs-cond
-                      Nargs
-                      [[klvm.ret-> [klvm.func-obj Func Nargs Name]]
+  Func Arity Name -> [klvm.nargs-cond
+                      Arity
+                      [[klvm.ret-> [klvm.func-obj Func Arity Name]]
                        [klvm.wipe 0]
                        [klvm.goto-next]]
-                      [[klvm.nargs- Nargs]]
+                      [[klvm.nargs- Arity]]
                       [[klvm.sp+ [klvm.nargs]]
-                       [klvm.sp- Nargs]
-                       [klvm.nargs- Nargs]]])
+                       [klvm.sp- Arity]
+                       [klvm.nargs- Arity]]])
 
 (define klvm.return-template
   X Next -> [klvm.if-nargs>0
@@ -95,9 +95,9 @@
   Name Nargs Type -> [klvm.entry Name Nargs (entry-func-name Name Type)])
 
 (define return-op
-  X Next C -> (klvm.return-template X Next)
-              where (value inline-func-return)
-  X Next C -> [klvm.return X Next])
+  X C -> (klvm.return-template X (next-reg C))
+         where (value inline-func-return)
+  X C -> [klvm.return X (next-reg C)])
 
 (define call-ret
   [] Acc -> Acc
@@ -159,9 +159,9 @@
   [klvm.call F Nargs Ret-reg X] C Acc -> (walk-call F Nargs Ret-reg X C Acc)
   [klvm.tailcall F Nargs X] C Acc -> (walk-tailcall F Nargs X C Acc)
   [klvm.reg-> R X] C Acc -> [[klvm.reg-> R X] | Acc]
-  [klvm.return X Next] C Acc -> (let R (nargs-reg C)
-                                     Acc' [[klvm.nargs-> [klvm.reg R]] | Acc]
-                                  [(return-op X Next C) | Acc'])
+  [klvm.return X] C Acc -> (let R (nargs-reg C)
+                                Acc' [[klvm.nargs-> [klvm.reg R]] | Acc]
+                             [(return-op X C) | Acc'])
   [klvm.push-error-handler E] C Acc -> [[klvm.push-error-handler E] | Acc]
   [klvm.pop-error-handler] C Acc -> [[klvm.pop-error-handler] | Acc]
   [klvm.native X] C Acc -> [[klvm.native X] | Acc]

@@ -2,9 +2,9 @@
   (reset-vm! *klvm*)
   (read-klvm-from-file "code.klvm2" *klvm*))
 
-(define (t1.klvmasm.setup)
-  (reset-vm! *klvmasm*)
-  (read-klvmasm-from-file "code.aklvm" *klvmasm*))
+(define (t1.asm.setup)
+  (reset-vm! *asm*)
+  (read-asm-from-file "code.aklvm" *asm*))
 
 (define t1.defs
   '((klvm-test.list-len ()) => 0
@@ -63,3 +63,8 @@
   (clear-log)
   (t1.klvm.setup)
   (test klvm-expr t1.defs))
+
+(define (t1.asm)
+  (clear-log)
+  (t1.asm.setup)
+  (test asm-expr t1.defs))

@@ -20,6 +20,10 @@
   ;; Register to store return value.
   (ret vm-ret set-vm-ret!) 
 
+  ;; Register to store prev-sp (used exclusively in bytecode/asm
+  ;; interpreter).
+  (prev-sp vm-prev-sp set-vm-prev-sp!)
+
   ;; Stack of error handlers.
   (err-handlers vm-err-handlers set-vm-err-handlers!)
 
@@ -117,7 +121,7 @@
 
 (define (vm-add-native! vm name arity func)
   (define (wrap fn)
-    (lambda (eval-1 idx)
+    (lambda (eval-1 _)
       (log/pp `(calling native ,name sp: ,(vm-sp vm)
                 nargs: ,(vm-nargs vm)
                 arity: ,arity))
@@ -138,7 +142,7 @@
                      (#t
                       (with-exception-catcher
                         (lambda (e)
-                          (show-step vm #f "EXCEPTION")
+                          (vm-show-step vm #f "EXCEPTION")
                           (log/pp `((,name ,@args) => ,e))
                           e)
                         (lambda ()
@@ -151,7 +155,7 @@
 
 (define (vm-add-primitive! vm name func)
   (define (wrap fn)
-    (lambda (eval-1 idx)
+    (lambda (eval-1 _)
       (log/pp `(calling primitive ,name sp: ,(vm-sp vm)
                 nargs: ,(vm-nargs vm)))
       (let loop ((i 0)
@@ -291,3 +295,32 @@
              #f)
             (#t (loop (+ i 1) ret))))))
 
+(define (vm-func-obj name arity code vm)
+  (let loop ((i 0)
+             (args '()))
+    (if (< i (vm-nargs vm))
+        (loop (+ i 1) (cons (vm-regs-ref vm i) args))
+        (mk-vm-closure name arity code (reverse args)))))
+
+(define (vm-show-step vm pc title)
+  (define (str-pc pc)
+    (if (and (pair? pc)
+             (vm-closure? (car pc))
+             (vm-closure-name (car pc)))
+        (cons (vm-closure-name (car pc)) (cdr pc))
+        pc))
+  (cond (log-step?
+         (log/puts "")
+         (log/puts (mkstr "## " title))
+         (log/pp `(cur: ,(str-pc pc)))
+         (log/pp `(nargs: ,(vm-nargs vm)))
+         (log/pp `(sp: ,(vm-sp vm)))
+         (log/pp `(prev-sp: ,(vm-prev-sp vm)))
+         (log/pp `(sp-top: ,(vm-sp-top vm)))
+         (log/pp `(ret: ,(vm-ret vm)))
+         (log/pp `(next: ,(str-pc (vm-next vm))))
+         (log/pp `(regs: ,(if #t
+                              (vm-regs vm)
+                              (subvector (vm-regs vm)
+                                         (vm-sp vm)
+                                         (vector-length (vm-regs vm)))))))))
