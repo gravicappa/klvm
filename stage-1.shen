@@ -10,9 +10,9 @@
 (defstruct context
   (func symbol)
   (nregs number)
-  (nargs number)
-  (stack-size number)
-  (stack-size-extra number)
+  (arity number)
+  (frame-size number)
+  (frame-size-extra number)
   (toplevel s-expr)
   (native (A --> context --> A)))
 
@@ -29,12 +29,12 @@
   X -> true where (boolean? X)
   _ -> false)
 
-(define func-reg X C -> (+ (context-nargs C) X))
-(define func-arg X C -> (- (context-nargs C) (+ X 1)))
+(define func-reg X C -> (+ (context-arity C) X))
+(define func-arg X C -> (- (context-arity C) (+ X 1)))
 
-(define upd-context-stack-size-extra
-  N C -> (context-stack-size-extra-> C N)
-         where (> N (context-stack-size-extra C))
+(define upd-context-frame-size-extra
+  N C -> (context-frame-size-extra-> C N)
+         where (> N (context-frame-size-extra C))
   _ C -> C)
 
 (define reg-from-arg
@@ -47,23 +47,17 @@
 
 (define set-call-args 
   [] _ Acc -> Acc
-  [A | As] I Acc -> (let X [klvm.reg A]
-                      (set-call-args As (+ I 1) [[klvm.reg-> I X] | Acc]))
-                    where (number? A)
-  [[A] | As] I Acc -> (set-call-args As (+ I 1) [[klvm.reg-> I A] | Acc])
+  [[A] | As] I Acc -> (set-call-args As (+ I 1) [[I | A] | Acc])
+  [A | As] I Acc -> (set-call-args As (+ I 1) [[I | [klvm.reg A]] | Acc])
   [X | As] _ _ -> (error "Unexpected arg expr: ~S~%" X))
-
-(define call-args
-  [] -> []
-  X -> [do | (reverse X)])
 
 (define walk-call
   F Args Return-reg C Acc ->
   (let R (regs-from-args Args C [])
        Nargs (length R)
-       . (upd-context-stack-size-extra Nargs C)
-       X (set-call-args R (context-stack-size C) [])
-    [[klvm.call F Nargs Return-reg (call-args X)] | Acc]))
+       . (upd-context-frame-size-extra Nargs C)
+       X (set-call-args R 0 [])
+    [[klvm.call F Nargs Return-reg (reverse X)] | Acc]))
 
 (define place-free-args
   [] _ _ Args Acc -> (@p Acc (reverse Args))
@@ -108,14 +102,12 @@
 (define set-tailcall-args'
   [] Acc -> Acc
   [[D | D] | Ps] Acc -> (set-tailcall-args' Ps Acc)
-  [[D | [X]] | Ps] Acc -> (let Acc [[klvm.reg-> D X] | Acc]
-                            (set-tailcall-args' Ps Acc))
-  [[D | S] | Ps] Acc -> (let Acc [[klvm.reg-> D [klvm.reg S]] | Acc]
-                          (set-tailcall-args' Ps Acc)))
+  [[D | [X]] | Ps] Acc -> (set-tailcall-args' Ps [[D | X] | Acc])
+  [[D | S] | Ps] Acc -> (set-tailcall-args' Ps [[D | [klvm.reg S]] | Acc]))
 
 (define set-tailcall-args
   Nregs Args Acc -> (let P (place-args Nregs Args)
-                         . (upd-context-stack-size-extra (+ (snd P) 1))
+                         . (upd-context-frame-size-extra (+ (snd P) 1))
                          Acc (set-tailcall-args' (fst P) Acc)
                       (@p Acc (snd P))))
 
@@ -123,9 +115,9 @@
   F Args C Acc ->
   (let R (regs-from-args Args C [])
        Nargs (length R)
-       . (upd-context-stack-size-extra Nargs C)
-       X (set-tailcall-args (context-stack-size C) R [])
-    [[klvm.tailcall F Nargs (call-args (fst X))] | Acc]))
+       . (upd-context-frame-size-extra Nargs C)
+       X (set-tailcall-args (context-frame-size C) R [])
+    [[klvm.tailcall F Nargs (reverse (fst X))] | Acc]))
 
 (define closure-args
   S N N Acc -> (reverse Acc)
@@ -143,10 +135,10 @@
 (define walk-closure
   Return-reg Args Nregs Init Body C Acc ->
   (let Ninit (length Init)
-       Nargs (+ Ninit (length Args))
+       Arity (+ Ninit (length Args))
        F (gensym klvm-lambda)
        TL (context-toplevel C)
-       A (closure-args (protect A) 0 Nargs [])
+       A (closure-args (protect A) 0 Arity [])
        Fn (context-native C)
        . (context-toplevel-> C (walk-func regkl.closure F A Nregs Body Fn TL))
     (mk-closure [klvm.lambda F] Args Init Return-reg C Acc)))
@@ -264,16 +256,13 @@
   regkl.toplevel -> toplevel
   regkl.closure -> closure)
 
-(define stack-size
-  Nregs Nargs -> (+ Nregs Nargs 2))
-
 (define walk-func
   Type Name Args Nregs Body Fn Toplevel -> 
-  (let Nargs (length Args)
-       S (stack-size Nregs Nargs)
-       C (mk-context Name Nregs Nargs S 0 Toplevel Fn)
+  (let Arity (length Args)
+       S (+ Nregs Arity)
+       C (mk-context Name Nregs Arity S 0 Toplevel Fn)
        Body' (walk-x1 Body false true C [])
-       Extra (context-stack-size-extra C)
+       Extra (context-frame-size-extra C)
        X [(func-code Type) Name Args S Extra | (reverse Body')]
     [X | (context-toplevel C)]))
 

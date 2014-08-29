@@ -19,17 +19,17 @@
 (defstruct context
   (func-name symbol)
   (func-type symbol)
-  (stack-size number)
-  (stack-size-extra number)
-  (nargs number)
+  (frame-size number)
+  (frame-size-extra number)
+  (arity number)
   (label number)
   (func s-expr)
   (toplevel s-expr))
 
 (set inline-func-entry false)
 (set inline-func-return false)
-(define next-reg C -> (- (context-stack-size C) 1))
-(define nargs-reg C -> (- (context-stack-size C) 2))
+(define next-reg C -> (- (context-frame-size C) 1))
+(define nargs-reg C -> (- (context-frame-size C) 2))
 
 (define prepend
   X Acc -> (append (reverse X) Acc))
@@ -89,10 +89,10 @@
   _ _ -> [])
 
 (define entry-op
-  Name Nargs Type -> (klvm.entry-template
-                      Name Nargs (entry-func-name Name Type))
+  Name Arity Type -> (klvm.entry-template
+                      Name Arity (entry-func-name Name Type))
                      where (value inline-func-entry)
-  Name Nargs Type -> [klvm.entry Name Nargs (entry-func-name Name Type)])
+  Name Arity Type -> [klvm.entry Name Arity (entry-func-name Name Type)])
 
 (define return-op
   X C -> (klvm.return-template X (next-reg C))
@@ -104,15 +104,16 @@
   Ret-reg Acc -> [[klvm.reg-> Ret-reg [klvm.ret]] | Acc])
 
 (define prepare-args
-  [] _ Acc -> Acc
-  Args C Acc -> (walk-x1 Args C Acc))
+  [] Off _ Acc -> Acc
+  [[I | X] | Xs] Off C Acc -> (let Acc [[klvm.reg-> (+ Off I) X] | Acc]
+                                (prepare-args Xs Off C Acc)))
 
 (define walk-call
-  F Nargs Ret-reg Prep C Acc -> (let S (context-stack-size C)
+  F Nargs Ret-reg Prep C Acc -> (let S (context-frame-size C)
                                      Next (next-label C)
                                      X [[klvm.next-> Next] | Acc]
                                      X [[klvm.closure-> F] | X]
-                                     X (prepare-args Prep C X)
+                                     X (prepare-args Prep S C X)
                                      X (prepend (call-template Nargs S) X)
                                      X (label Next C X)
                                      X [[klvm.sp- S] | X]
@@ -124,9 +125,9 @@
                              Acc [[klvm.closure-> F] | Acc]
                              Acc [[klvm.nargs-> [klvm.reg (nargs-reg C)]]
                                   | Acc]
-                             Acc (prepare-args Prep C Acc)
-                             S (+ (context-stack-size C)
-                                  (context-stack-size-extra C))
+                             Acc (prepare-args Prep 0 C Acc)
+                             S (+ (context-frame-size C)
+                                  (context-frame-size-extra C))
                           (prepend (tailcall-template Nargs S C) Acc)))
 
 (define walk-if-expr
@@ -173,25 +174,26 @@
   klvm.s1.closure -> klvm.closure)
 
 (define func-entry
-  C -> (prepend [(entry-op (context-func-name C) (context-nargs C)
+  C -> (prepend [(entry-op (context-func-name C) (context-arity C)
                            (context-func-type C))
-                 [klvm.nregs-> (+ (context-stack-size C)
-                                  (context-stack-size-extra C))]
+                 [klvm.nregs-> (+ (context-frame-size C)
+                                  (context-frame-size-extra C))]
                  [klvm.reg-> (nargs-reg C) [klvm.nargs]]
                  [klvm.reg-> (next-reg C) [klvm.next]]]
                 (label (next-label C) C [])))
 
 (define walk-toplevel-expr
-  [Type Name Args Stack-size Stack-size-extra Code] Acc ->
-  (let Nargs (length Args)
-       C (mk-context Name Type Stack-size Stack-size-extra Nargs -1 [] Acc)
+  [Type Name Args Frame-size Frame-size-extra Code] Acc ->
+  (let Arity (length Args)
+       Frame-size' (+ Frame-size 2)
+       C (mk-context Name Type Frame-size' Frame-size-extra Arity -1 [] Acc)
        X (func-entry C)
        X (walk-x1 Code C X)
        X (close-label C X)
        Acc' (context-toplevel C)
        Hdr (func-hdr Type)
        Labels (reverse (context-func C))
-    [[Hdr Name Args Stack-size Labels] | Acc'])
+    [[Hdr Name Args Frame-size' Labels] | Acc'])
   where (element? Type [klvm.s1.func klvm.s1.closure klvm.s1.toplevel]))
 
 (define walk-toplevel
