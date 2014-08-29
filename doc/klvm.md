@@ -253,6 +253,8 @@ It is introduced to detect the named function call from lambda call. In the
 latter case target language translator may use direct lambda object instead of
 making a function name lookup.
 
+-----------------------------------
+
 ################
 
 ### klvm-closure, klvm-func, klvm-toplevel

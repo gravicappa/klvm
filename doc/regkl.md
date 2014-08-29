@@ -152,5 +152,3 @@ Similar to `if` form in KL.
 
 ## Information about variables names is lost.
 ## Does not support `type` form yet.
-
-(regkl.walk [[let X 3 [+ X [- X 5]]]] false)
