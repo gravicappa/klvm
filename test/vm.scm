@@ -125,12 +125,12 @@
       (log/pp `(calling native ,name sp: ,(vm-sp vm)
                 nargs: ,(vm-nargs vm)
                 arity: ,arity))
-      (set-vm-sp-top! vm (+ (vm-sp vm) arity))
       (let loop ((i 0)
                  (args '()))
         (cond ((< i (vm-nargs vm))
                (loop (+ i 1) (cons (vm-regs-ref vm i) args)))
               (#t
+               (set-vm-sp-top! vm (+ (vm-sp vm) i))
                (log/pp `(calling native (,name ,@args)))
                (cond ((< i arity)
                       (set-vm-ret!
@@ -212,6 +212,7 @@
 (define (reset-vm! vm)
   (clear-vm-regs! vm)
   (set-vm-sp! vm 0)
+  (set-vm-prev-sp! vm 0)
   (set-vm-sp-top! vm 0))
 
 (define (vm-fn-ref vm name)
@@ -247,9 +248,9 @@
                                      (vm-sp vm)
                                      (vector-length (vm-regs vm))))))
 
-(define (vm-put-args args vm)
+(define (vm-put-args args off vm)
   (let loop ((args args)
-             (i (vm-sp vm)))
+             (i off))
     (cond ((pair? args)
            (vector-set! (vm-regs vm) i (car args))
            (loop (cdr args) (+ i 1)))
@@ -266,7 +267,7 @@
     (set-vm-ret! vm #f)
     (set-vm-nargs! vm (+ nargs (length (vm-closure-vars fn))))
     (vm-nregs-> vm (vm-nargs vm))
-    (vm-put-args (append (reverse args) (vm-closure-vars fn)) vm)))
+    (vm-put-args (append (reverse args) (vm-closure-vars fn)) (vm-sp vm) vm)))
 
 (define (vm-call run vm expr)
   (let ((nargs (length (cdr expr)))

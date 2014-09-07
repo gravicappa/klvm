@@ -70,3 +70,6 @@
   (reset-tests!)
   (run-test-exprs fn defs)
   (show-test-results *test-results*))
+
+(define (test-ref defs i)
+  (list-ref defs (* i 3)))
