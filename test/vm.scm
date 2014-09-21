@@ -303,6 +303,11 @@
         (loop (+ i 1) (cons (vm-regs-ref vm i) args))
         (mk-vm-closure name arity code (reverse args)))))
 
+(define (vm-regs-frame vm . whole?)
+  (if (and (pair? whole?) (car whole?))
+      (vm-regs vm)
+      (subvector (vm-regs vm) (vm-sp vm) (vector-length (vm-regs vm)))))
+
 (define (vm-show-step vm pc title)
   (define (str-pc pc)
     (if (and (pair? pc)
@@ -320,8 +325,4 @@
          (log/pp `(sp-top: ,(vm-sp-top vm)))
          (log/pp `(ret: ,(vm-ret vm)))
          (log/pp `(next: ,(str-pc (vm-next vm))))
-         (log/pp `(regs: ,(if #t
-                              (vm-regs vm)
-                              (subvector (vm-regs vm)
-                                         (vm-sp vm)
-                                         (vector-length (vm-regs vm)))))))))
+         (log/pp `(regs: ,(vm-regs-frame vm #t))))))
