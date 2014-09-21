@@ -177,6 +177,11 @@
     (set-vm-nargs! vm (+ nargs tmp-reg-nargs))
     (set-vm-next! vm (vm-regs-ref vm (asm-next-reg current-fn vm))))
 
+  (define (load-const reg x)
+    (let ((x (cond ((symbol? x) (table-ref (vm-fns vm) x x))
+                   (#t x))))
+      (vm-regs-set! vm reg x)))
+
   (let loop ((pc0 (car pc))
              (pc1 (cdr pc)))
     (vm-show-step vm (cons pc0 pc1) "STEP")
@@ -195,10 +200,10 @@
             ((klvm.load-fn->)
              (vm-regs-set! vm
                            (cadr x)
-                           (table-ref (vm-closures vm) (caddr expr)))
+                           (table-ref (vm-closures vm) (caddr x)))
              (loop pc0 (+ pc1 1)))
             ((klvm.load-const->)
-             (vm-regs-set! vm (cadr x) (caddr x))
+             (load-const (cadr x) (caddr x))
              (loop pc0 (+ pc1 1)))
             ((klvm.closure-reg->)
              (set! closure (vm-regs-ref vm (cadr x)))
