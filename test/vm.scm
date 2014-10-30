@@ -308,6 +308,18 @@
       (vm-regs vm)
       (subvector (vm-regs vm) (vm-sp vm) (vector-length (vm-regs vm)))))
 
+(define (vm-show-regs-frame vm . whole?)
+  (let* ((whole? (and (pair? whole?) (car whole?)))
+         (n (vector-length (vm-regs vm)))
+         (off (if whole?
+                  0
+                  (vm-sp vm))))
+    (let loop ((i off))
+      (if (< i n)
+          (let ((r (vector-ref (vm-regs vm) i)))
+            (log/pp `(,i : ,r))
+            (loop (+ i 1)))))))
+
 (define (vm-show-step vm pc title)
   (define (str-pc pc)
     (if (and (pair? pc)
@@ -325,4 +337,4 @@
          (log/pp `(sp-top: ,(vm-sp-top vm)))
          (log/pp `(ret: ,(vm-ret vm)))
          (log/pp `(next: ,(str-pc (vm-next vm))))
-         (log/pp `(regs: ,(vm-regs-frame vm #t))))))
+         (vm-show-regs-frame vm #t))))
