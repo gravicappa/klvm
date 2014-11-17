@@ -7,13 +7,14 @@
   (read-asm-from-file "code.aklvm" *asm*))
 
 (define t1.defs
-  '((klvm-test.list-len ()) => 0
-    (klvm-test.list-len (1 2 3 4 a)) => 5
+  '((+ 7 8) => 15
+    (- 7 8) => -1
     (klvm-test.test-call 9) => 23
+    (klvm-test.test-tail-call) => 0
+    (klvm-test.list-len ()) => 0
+    (klvm-test.list-len (1 2 3 4 a)) => 5
     (klvm-test.reversex ()) => ()
     (klvm-test.reversex (1 2 3 4 5)) => (5 4 3 2 1)
-    (+ 7 8) => 15
-    (- 7 8) => -1
     (klvm-test.test-partial) => 9
     (klvm-test.test-partial-2) => 30
     (klvm-test.test-partial-3) => 30

@@ -79,7 +79,7 @@
   To X C Acc -> (loadconst To X C Acc) where (klvm.s1.const? X))
 
 (define call'
-  [] C Acc -> (funcall C Acc)
+  [] C Acc -> [[klvm.drop-ret] | (funcall C Acc)]
   Ret-reg C Acc -> [[klvm.load-ret-> Ret-reg] | (funcall C Acc)])
 
 (define prepare-args
@@ -107,11 +107,16 @@
   Where true C Acc -> Acc
   Where false C Acc -> (jump Where C Acc))
 
+(define then-code-len
+  Code true -> (code-len Code)
+  Code false -> (+ (code-len Code) 1))
+
 (define walk-if
   [klvm.reg R] Then Else Tail? C Acc ->
   (let Then-code (walk-x1 Then C (mk-code))
        Else-code (walk-x1 Else C (mk-code))
-       Acc (if-reg-expr R (code-len Then-code) C Acc)
+       Then-code-len (then-code-len Then-code Tail?)
+       Acc (if-reg-expr R Then-code-len C Acc)
        Acc (code-append Acc Then-code)
        Acc (if-jump (code-len Else-code) Tail? C Acc)
      (code-append Acc Else-code)))

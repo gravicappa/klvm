@@ -117,6 +117,11 @@
   [let X [adder 6]
     [X 8]]]
 
+[defun test-tail-call []
+  [let X [adder 6]
+    [let Y [X 8]
+      [- Y 14]]]]
+
 [defun reversex-aux [List Acc]
   [cond [[= [] List] Acc]
         [true [reversex-aux [tl List] [cons [hd List] Acc]]]]]
@@ -367,5 +372,10 @@
 
 (defun test-closure-3 ()
   (call-help list-5+2 (cons 1 (cons 2 (cons 3 (cons 4 (cons 5 ()))))) a b))
+
+(defun test-tail-call ()
+  (let X (adder 6)
+    (let Y (X 8)
+      (- Y 14))))
 
 *\

@@ -64,5 +64,11 @@
 
 [[regkl.func test-closure-4 [] 2 [do [regkl.set-reg! 0 5] [regkl.set-reg! 0 [regkl.closure [A] 0 [[regkl.get-reg 0]] [+ [regkl.get-arg 1] [regkl.get-arg 0]]]] [regkl.set-reg! 1 [regkl.closure [F X] 0 [] [[regkl.get-arg 1] [regkl.get-arg 0]]]] [[regkl.get-reg 1] [regkl.get-reg 0] 12]]]]
 
+(klvm.regkl.t [
+[defun test-tail-call []
+  [let X [adder 6]
+    [let Y [X 8]
+      [- Y 14]]]]])
+
 
 *\
