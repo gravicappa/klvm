@@ -228,7 +228,7 @@
     (if (>= size nregs)
         (set-vm-regs! vm (vector-append
                             (vm-regs vm)
-                            (make-vector (- size nregs)))))))
+                            (make-vector (- size nregs) #f))))))
 
 (define (vm-wipe-2 vm start)
   (let ((end (vm-sp-top vm))

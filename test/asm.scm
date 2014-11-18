@@ -71,7 +71,7 @@
                   (vm-nregs-> vm (asm-closure-nregs fn))
                   (vm-regs-set! vm (asm-next-reg fn vm) (vm-next vm))
                   (vm-regs-set! vm (asm-nargs-reg fn vm) (vm-nargs vm))
-                  (vm-regs-set! vm (asm-prev-sp-reg fn vm) (vm-prev-sp vm))
+                  ;(vm-regs-set! vm (asm-prev-sp-reg fn vm) (vm-prev-sp vm))
                   #f)
                  (#t
                   (set-vm-nargs! vm (- nargs arity))
@@ -82,12 +82,8 @@
                             prev-sp-reg: ,(asm-prev-sp-reg fn vm)))
                   (vm-regs-set! vm (asm-next-reg fn vm) (vm-next vm))
                   (vm-regs-set! vm (asm-nargs-reg fn vm) (vm-nargs vm))
-                  (vm-regs-set! vm (asm-prev-sp-reg fn vm) (vm-prev-sp vm))
+                  ;(vm-regs-set! vm (asm-prev-sp-reg fn vm) (vm-prev-sp vm))
                   #f))))
-        ((procedure? (vm-closure-code fn))
-         ;; save prev-sp somehow
-         ;((vm-closure-code fn) #f #f)
-         #f)
         (#t (error `(Unknown function object ,fn)))))
 
 (define (asm-ensure-pc x)
@@ -266,7 +262,7 @@
        (tail-fn-> (table-ref (vm-closures vm) (cadr op)) (caddr op))
        (jmp (+ pi 1)))
       ((klvm.push-error-handler)
-       (vm-push-error-handler (vm-regs-ref vm (cadr expr)) vm)
+       (vm-push-error-handler (vm-regs-ref vm (cadr op)) vm)
        (jmp (+ pi 1)))
       ((klvm.pop-error-handler)
        (vm-pop-error-handler vm)
