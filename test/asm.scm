@@ -201,9 +201,9 @@
     (set-vm-next! vm (vm-regs-ref vm (asm-next-reg pp vm))))
   
   (define (load-const reg x)
-    (let ((x (cond ((symbol? x) (table-ref (vm-fns vm) x x))
-                   ((eq? x 'true) #t)
+    (let ((x (cond ((eq? x 'true) #t)
                    ((eq? x 'false) #f)
+                   ((symbol? x) (table-ref (vm-fns vm) x x))
                    (#t x))))
       (vm-regs-set! vm reg x)))
   
