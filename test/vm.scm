@@ -105,6 +105,12 @@
         e)
       #f))
 
+(define (vm-apply-error-handler handler err vm)
+  (set-vm-sp! vm (vm-error-handler-sp handler))
+  (set-vm-next! vm (vm-error-handler-next handler))
+  (vm-wipe vm 0)
+  (vm-call* (vm-error-handler-func handler) (list err) vm))
+
 (define (vm-ensure-func func vm)
   (cond ((symbol? func) (vm-fn-ref vm func))
         ((vm-closure? func) func)
@@ -216,6 +222,8 @@
   (set-vm-sp! vm 0)
   (set-vm-prev-sp! vm 0)
   (set-vm-sp-top! vm 0))
+
+(define (vm-fn-ref* vm name) (table-ref (vm-fns vm) name #f))
 
 (define (vm-fn-ref vm name)
   (let ((fn (table-ref (vm-fns vm) name #f)))

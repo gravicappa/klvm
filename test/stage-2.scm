@@ -187,10 +187,7 @@
            (let ((e (vm-pop-error-handler vm)))
              (cond ((vm-error-handler? e)
                     (log/pp `(handler: ,e))
-                    (set-vm-sp! vm (vm-error-handler-sp e))
-                    (set-vm-next! vm (vm-error-handler-next e))
-                    (vm-wipe vm 0)
-                    (vm-call* (vm-error-handler-func e) (list next) vm)
+                    (vm-apply-error-handler e (list next) vm)
                     (loop (cons (vm-error-handler-func e) 0)))
                    (#t (error `(unhandled exception ,next)))))))))
 
