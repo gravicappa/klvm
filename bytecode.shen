@@ -20,9 +20,10 @@
   (backend backend))
 
 (defstruct backend
+  (native (A --> klvm.context --> A))
   (mk-code (--> A))
   (code-len (A --> number))
-  (code-append (A --> A --> A))
+  (code-append! (A --> A --> A))
   (prep-code (A --> A))
   (const (A --> context --> A))
   (loadreg (number --> number --> context --> A --> A))
@@ -44,7 +45,7 @@
 
 (klvm.bytecode.def-backend-fn mk-code () C)
 (klvm.bytecode.def-backend-fn code-len (X) C)
-(klvm.bytecode.def-backend-fn code-append (X Y) C)
+(klvm.bytecode.def-backend-fn code-append! (X Y) C)
 (klvm.bytecode.def-backend-fn prep-code (X) C)
 (klvm.bytecode.def-backend-fn const (X C) C)
 
@@ -108,9 +109,9 @@
        Else-code (walk-x1 Else C (mk-code C))
        Then-code-len (then-code-len Then-code Tail? C)
        Acc (if-reg-expr R Then-code-len C Acc)
-       Acc (code-append Acc Then-code C)
+       Acc (code-append! Acc Then-code C)
        Acc (if-jump (code-len Else-code C) Tail? C Acc)
-     (code-append Acc Else-code C)))
+     (code-append! Acc Else-code C)))
 
 (define walk-do
   [X] C Acc -> (walk-x1 X C Acc)
@@ -142,6 +143,7 @@
   [X | Xs] S B Acc -> (walk-toplevel Xs S B (walk-toplevel-expr X S B Acc)))
 
 (define walk
-  X S+ B -> (walk-toplevel (klvm.s1.walk [] X) S+ B ((backend-mk-code B))))
+  X S+ B -> (let Code ((backend-mk-code B))
+              (walk-toplevel (klvm.s1.walk (backend-native B) X) S+ B Code)))
 
 )

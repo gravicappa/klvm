@@ -92,11 +92,11 @@
   Type Name Args Frame-size Frame-size-extra Code _ Acc ->
   [[Type Name Args Frame-size Frame-size-extra (reverse Code)] | Acc])
 
-(set backend (klvm.bytecode.mk-backend mk-code code-len code-append prep-code
-                                       const loadreg loadfn loadconst jump
-                                       closure-> closure-tail-> funcall
-                                       tailcall if-reg-expr retreg retfn
-                                       retconst push-error-handler
+(set backend (klvm.bytecode.mk-backend [] mk-code code-len code-append
+                                       prep-code const loadreg loadfn
+                                       loadconst jump closure-> closure-tail->
+                                       funcall tailcall if-reg-expr retreg
+                                       retfn retconst push-error-handler
                                        pop-error-handler emit-func))
 
 (define walk
