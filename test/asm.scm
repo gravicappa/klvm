@@ -305,7 +305,7 @@
        (vm-pop-error-handler vm)
        (jmp (+ pi 1)))
       ((klvm.jump) (jmp (+ pi 1 (cadr op))))
-      ((klvm.jmp-unless)
+      ((klvm.jump-unless)
        (jmp (if (vm-regs-ref vm (cadr op))
                 (+ pi 1)
                 (+ pi 1 (caddr op)))))
