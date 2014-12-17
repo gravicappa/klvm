@@ -36,11 +36,14 @@ Let's first look at this KLambda code:
 KLVM transformation can be outlined with assembler-like pseudocode shown
 below. Also it demonstrate the usage of `nargs`, `next` and `ret` registers.
 
+TODO: fix variable name confusion
+
     func1.label0:
       stack[i] <- next
       A <- arg1
       B <- arg2
       nargs <- 2
+      \\ TODO: fix confusion
       arg1 <- A
       arg2 <- B
       next <- func1.label1

@@ -195,9 +195,13 @@
   X Return-reg C Acc -> [[klvm.reg-> Return-reg X] | Acc] where (const? X)
   X _ _ _ -> (error "Unexpected L2 Reg-KLambda expression ~S" X))
 
+(define head*
+  [] -> []
+  [X | Xs] -> X)
+
 (define walk-if-reg
-  R Then Else Tail? C Acc -> (let T' (head (walk-x1 Then false Tail? C []))
-                                  E' (head (walk-x1 Else false Tail? C []))
+  R Then Else Tail? C Acc -> (let T' (head* (walk-x1 Then false Tail? C []))
+                                  E' (head* (walk-x1 Else false Tail? C []))
                                   Key (if Tail? klvm.tailif klvm.if)
                                [[Key [klvm.reg R] T' E'] | Acc]))
 
@@ -224,6 +228,7 @@
   Fn false Acc -> [(in-do' (Fn [])) | Acc])
 
 (define walk-x1
+  \\X _ Tail? _ _ <- (do (output "(klvm.s1.walk-x1 ~S ~S)~%" X Tail?) (fail))
   [do | X] Do? Tail? C Acc -> (in-do (walk-do X Tail? C) Do? Acc)
   [if If Then Else] _ Tail? C Acc -> (walk-if If Then Else Tail? C Acc)
   [regkl.reg R] _ true C Acc -> [[klvm.return [klvm.reg (func-reg R C)]]
@@ -249,7 +254,7 @@
 
   _ _ false _ Acc -> Acc
   X _ true C Acc -> [[klvm.return X] | Acc]
-  X _ _ _ _ -> (error "Unexpected L1 Reg-KLambda expression ~S" X))
+  X _ _ _ _ -> (error "klvm.s1.walk-x1: Unexpected L1 REGKL expression ~S" X))
 
 (define func-code
   regkl.func -> func
@@ -287,4 +292,5 @@
 
 (define walk
   Fn X -> (let X' (regkl.walk (map (function denest.walk) X) false)
+               \\. (output "(regkl => ~S)~%" X')
             (walk-toplevel' X' (ensure-native Fn) []))))

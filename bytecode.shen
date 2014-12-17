@@ -96,6 +96,7 @@
   X C Acc -> (retconst X C Acc) where (klvm.s1.const? X))
 
 (define if-jump
+  \\ TODO: optimize zero offset jumps
   Where true C Acc -> Acc
   Where false C Acc -> (jump Where C Acc))
 
@@ -104,6 +105,7 @@
   Code false C -> (+ (code-len Code C) 1))
 
 (define walk-if
+  \\ TODO: optimize NOP 'if' branches
   [klvm.reg R] Then Else Tail? C Acc ->
   (let Then-code (walk-x1 Then C (mk-code C))
        Else-code (walk-x1 Else C (mk-code C))
@@ -127,7 +129,8 @@
   [klvm.return X] C Acc -> (walk-return X C Acc)
   [klvm.push-error-handler E] C Acc -> (push-error-handler E C Acc)
   [klvm.pop-error-handler] C Acc -> (pop-error-handler C Acc)
-  X _ _ -> (error "Unexpected L1 expression: ~S~%" X))
+  [] _ Acc -> Acc
+  X _ _ -> (error "klvm.bytecode.walk-x1: Unexpected L1 expression: ~S~%" X))
 
 (define walk-toplevel-expr
   [Type Name Args Frame-size Frame-size-extra Code] S+ B Acc ->
@@ -136,7 +139,9 @@
        C (mk-context Name Type Frame-size' Frame-size-extra Arity Acc [] B)
        X (walk-x1 Code C (mk-code C))
        Acc' (context-toplevel C)
-    (emit-func Type Name Args Frame-size' Frame-size-extra X C Acc')))
+    (emit-func Type Name Args Frame-size' Frame-size-extra X C Acc'))
+  X _ _ _ -> (error "klvm.bytecode.walk-toplevel-expr: unexpected expr ~S~%"
+                    X))
 
 (define walk-toplevel
   [] S B Acc -> ((backend-prep-code B) Acc)

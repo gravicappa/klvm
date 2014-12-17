@@ -1,5 +1,7 @@
 (package klvm.bytecode.asm [klvm.bytecode.walk klvm.bytecode.mk-backend
                             klvm.bytecode-asm-from-kl
+                            klvm.bytecode.asm.print
+                            klvm.bytecode.cut-package
 
                             klvm.lambda
                             klvm.reg
@@ -104,4 +106,33 @@
 
 (define klvm.bytecode-asm-from-kl
   X S+ -> (walk X S+))
+
+(define str-join*
+  [] _ _ Acc -> Acc
+  [X] _ F Acc -> (make-string (cn "~A" F) Acc X)
+  [X | Xs] Sep F Acc -> (let Fmt (cn "~A" (cn F "~A"))
+                          (str-join* Xs Sep F (make-string Fmt Acc X Sep))))
+
+(define str-join
+  List Sep F -> (str-join* List Sep F ""))
+
+(define print-func-code
+  [] Stream -> true
+  [[Op | Args] | Ops] Stream -> (let . (pr (str-join [Op | Args] " " "~S")
+                                           Stream)
+                                     . (pr (n->string 10) Stream)
+                                  (print-func-code Ops Stream)))
+
+(define print-func
+  [Type Name Args Size Size+ Code] Stream ->
+  (let Arity (length Args)
+       . (pr (make-string "~%~A ~A ~A ~A ~A~%" Type Name Arity Size Size+)
+             Stream)
+    (print-func-code Code Stream)))
+
+(define klvm.bytecode.asm.print
+  [] Stream -> true
+  [Asm | Asms] Stream -> (do (print-func Asm Stream)
+                             (klvm.bytecode.asm.print Asms Stream)))
+
 )

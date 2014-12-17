@@ -198,3 +198,12 @@
 
 (define (klvm-expr expr)
   (apply klvm-call *klvm* (car expr) (cdr expr)))
+
+(define (t1.klvm.setup)
+  (reset-vm! *klvm*)
+  (read-klvm-from-file "code.klvm2" *klvm*))
+
+(define (t1.klvm)
+  (clear-log)
+  (t1.klvm.setup)
+  (test klvm-expr t1.defs))

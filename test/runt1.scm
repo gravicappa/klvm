@@ -2,6 +2,7 @@
 (load "test")
 (load "vm")
 (load "stage-2")
+(load "readsrc")
 (load "asm")
 (load "py")
 (load "js")

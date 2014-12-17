@@ -166,7 +166,8 @@
   [klvm.push-error-handler E] C Acc -> [[klvm.push-error-handler E] | Acc]
   [klvm.pop-error-handler] C Acc -> [[klvm.pop-error-handler] | Acc]
   [klvm.native X] C Acc -> [[klvm.native X] | Acc]
-  X _ _ -> (error "Unexpected L1 expression: ~S~%" X))
+  [] _ Acc -> Acc
+  X _ _ -> (error "klvm.s2.walk-x1: Unexpected L1 expression: ~S~%" X))
 
 (define func-hdr
   klvm.s1.func -> klvm.func

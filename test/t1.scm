@@ -1,16 +1,14 @@
-(define (t1.klvm.setup)
-  (reset-vm! *klvm*)
-  (read-klvm-from-file "code.klvm2" *klvm*))
-
-(define (t1.asm.setup)
-  (reset-vm! *asm*)
-  (read-asm-from-file "code.aklvm" *asm*))
 
 (define t1.defs
   '((+ 7 8) => 15
     (- 7 8) => -1
     (klvm-test.test-call 9) => 23
     (klvm-test.test-tail-call) => 0
+    (klvm-test.test-if #t) => klvm-test.yes
+    (klvm-test.test-if #f) => klvm-test.no
+    (klvm-test.test-ret-elim #t) => #t
+    (klvm-test.test-ret-elim #f) => #f
+    (klvm-test.test-ret-elim 3) => 3
     (klvm-test.list-len ()) => 0
     (klvm-test.list-len (1 2 3 4 a)) => 5
     (klvm-test.reversex ()) => ()
@@ -59,13 +57,3 @@
     (klvm-test.test-trap-error-2) => 0
     (klvm-test.test-trap-error-3) => 0
     (klvm-test.test-trap-error-4) => 0))
-
-(define (t1.klvm)
-  (clear-log)
-  (t1.klvm.setup)
-  (test klvm-expr t1.defs))
-
-(define (t1.asm)
-  (clear-log)
-  (t1.asm.setup)
-  (test asm-expr t1.defs))

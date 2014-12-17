@@ -86,6 +86,17 @@
 
 (set *code1* [
 
+[defun test-if [X]
+  [if X
+      yes
+      no]]
+
+[defun test-ret-elim [X]
+  [let A [if X
+             yes
+             no]
+    X]]
+
 [defun list-len-aux [V10659 V10660]
   [cond [[= [] V10659] V10660]
         [[cons? V10659] [list-len-aux [tl V10659] [+ V10660 1]]]
@@ -352,30 +363,13 @@
 \\(compile-code1)
 )
 
-\*
+(define klvm-test.regkl
+  X -> (regkl.walk (map (function denest.walk) X) false))
 
-
-(defun list-5+2 (V12320 V12321 V12322 V12323 V12324 V12325 V12326)
-  (cons V12320
-        (cons V12321
-              (cons V12322
-                    (cons V12323
-                          (cons V12324
-                                (cons V12325
-                                      (cons V12326 ()))))))))
-
-(defun call-help (V12327 V12328 V12329 V12330)
-  (cond ((= () V12328) (V12327 V12329 V12330))
-        ((cons? V12328)
-         (call-help (V12327 (hd V12328)) (tl V12328) V12329 V12330))
-        (true (shen.f_error call-help))))
-
-(defun test-closure-3 ()
-  (call-help list-5+2 (cons 1 (cons 2 (cons 3 (cons 4 (cons 5 ()))))) a b))
-
-(defun test-tail-call ()
-  (let X (adder 6)
-    (let Y (X 8)
-      (- Y 14))))
-
-*\
+(define klvm-test.s1/s
+  S -> (klvm-test.s1/s (read-from-string S)) where (string? S)
+  Kl -> (let RK (regkl.walk (map (function denest.walk) Kl) false)
+             . (output "REGKL:~%~S~%~%" RK)
+             S1 (klvm.bytecode.asm.walk Kl 3)
+             . (output "KLVM.Stage-1:~%~S~%~%" S1)
+          true))
