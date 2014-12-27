@@ -118,7 +118,8 @@
 
 (define print-func-code
   [] Stream -> true
-  [[Op | Args] | Ops] Stream -> (let . (pr (str-join [Op | Args] " " "~S")
+  [[Op | Args] | Ops] Stream -> (let Op' (klvm.bytecode.cut-package Op)
+                                     . (pr (str-join [Op' | Args] " " "~S")
                                            Stream)
                                      . (pr (n->string 10) Stream)
                                   (print-func-code Ops Stream)))
