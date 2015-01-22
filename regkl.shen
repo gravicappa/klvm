@@ -281,18 +281,24 @@
                                     X (mk-defun-kl F Args Body [] Toplevel? C)
                                  [X | (context-toplevel C)]))
 
+(define toplevel-do
+  [] -> []
+  [X] -> X
+  [X | Y] -> [do | (reverse [X | Y])])
+
 (define walk-toplevel
-  [defun fail [] | _] _ Acc -> Acc
-  [defun F Args Body] _ Acc -> (walk-defun F Args Body false Acc)
-  [X | Y] _ Acc -> (let Name (gensym shen-toplevel-)
-                     (walk-defun Name [] [X | Y] true Acc))
-  X true Acc -> Acc
-  X false Acc -> [X | Acc])
+  X Acc -> (let Name (gensym shen-toplevel-)
+             (walk-defun Name [] (toplevel-do X) true Acc)))
 
 (define walk-aux
-  [] _ Acc -> (reverse Acc)
-  [X | R] Elim? Acc -> (walk-aux R Elim? (walk-toplevel X Elim? Acc)))
+  [] _ Acc Toplevel -> (reverse (walk-toplevel Toplevel Acc))
+  [[defun fail [] | _] | R] Elim? Acc Toplevel -> (walk-aux R Elim? Acc Toplevel)
+  [[defun F Args Body] | R] Elim? Acc Toplevel -> (let Acc' (walk-defun F Args Body false Acc)
+                                                    (walk-aux R Elim? Acc' Toplevel))
+  [[X | Y] | R] Elim? Acc Toplevel -> (walk-aux R Elim? Acc [[X | Y] | Toplevel])
+  [X | R] true Acc Toplevel -> (walk-aux R true Acc Toplevel)
+  [X | R] false Acc Toplevel -> (walk-aux R false [X | Acc] Toplevel))
 
 (define walk
-  Exprs Elim-toplevel-atoms? -> (walk-aux Exprs Elim-toplevel-atoms? []))
+  Exprs Elim-toplevel-atoms? -> (walk-aux Exprs Elim-toplevel-atoms? [] []))
 )
