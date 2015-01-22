@@ -142,7 +142,6 @@
 (define print-op*
   Op Args Const-idc Const Stream ->
   (let Op' (klvm.bytecode.cut-package Op)
-       . (output "print-op* ~A ~S ~S~%" Op Const Const-idc)
        C (map (/. I (head (<-vector Const I))) (map (+ 1) Const-idc))
        . (pr (str-join [Op' | Args] " " "~S") Stream)
        . (pr (comment (str-join C " " "~S")) Stream)
@@ -150,7 +149,6 @@
     true))
 
 (define print-op
-  Op Args Const _ <- (do (output "~A" [print-op Op Args]) (fail))
   Op [A B] Const Stream -> (print-op* Op [A B] [B] Const Stream)
                            where (element? Op [klvm.load-const->
                                                klvm.load-fn->])
