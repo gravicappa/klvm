@@ -5,7 +5,15 @@
     (@s C Cs) W -> (cut-package* Cs (@s W C)))
 
   (define cut-package
-    S -> (intern (cut-package* (str S) ""))))
+    S -> (intern (cut-package* (str S) "")))
+
+  (define collect-enum-defs
+    [] Val Acc -> (reverse Acc)
+    [[C V] | Xs] Val Acc -> (collect-enum-defs Xs (+ V 1) [[define C -> V] | Acc])
+    [C | Xs] Val Acc -> (collect-enum-defs Xs (+ Val 1) [[define C -> Val] | Acc])))
+
+(define klvm.bytecode.def-enum-func
+  Defs -> [package null [] | (klvm.bytecode.collect-enum-defs Defs 0 [])])
 
 (define klvm.bytecode.def-backend-fn-func
   Func Args Carg -> (let Head [define Func]
@@ -20,6 +28,9 @@
 (defmacro klvm.bytecode.def-backend-macro
   [klvm.bytecode.def-backend-fn Func Args Carg] ->
   (klvm.bytecode.def-backend-fn-func Func Args Carg))
+
+(defmacro klvm.bytecode.def-enum
+  [klvm.bytecode.def-enum | Defs] -> (klvm.bytecode.def-enum-func Defs))
 
 (read-from-string "(package klvm.bytecode [] (klvm.bytecode.def-backend-fn mk-code [] C))")
 

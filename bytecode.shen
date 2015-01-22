@@ -16,6 +16,7 @@
   (frame-size-extra number)
   (nargs number)
   (toplevel (list A))
+  (const table)
   (jumps table)
   (backend backend))
 
@@ -25,7 +26,6 @@
   (code-len (A --> number))
   (code-append! (A --> A --> A))
   (prep-code (A --> A))
-  (const (A --> context --> A))
   (loadreg (number --> number --> context --> A --> A))
   (loadfn (number --> symbol --> context --> A --> A))
   (loadconst (number --> B --> context --> A --> A))
@@ -47,7 +47,6 @@
 (klvm.bytecode.def-backend-fn code-len (X) C)
 (klvm.bytecode.def-backend-fn code-append! (X Y) C)
 (klvm.bytecode.def-backend-fn prep-code (X) C)
-(klvm.bytecode.def-backend-fn const (X C) C)
 
 (klvm.bytecode.def-backend-fn loadreg (To From C Acc) C)
 (klvm.bytecode.def-backend-fn loadfn (To From C Acc) C)
@@ -68,6 +67,19 @@
                               (Type Name Args Frame-size Frame-size-extra Code
                                C Acc)
                               C)
+
+(define ensure-const*
+  X Type N [] List -> (@p N [[X | Type] | List])
+  X Type N [[X | Type] | Ys] List -> (@p N List)
+  X Type N [Y | Ys] List -> (ensure-const* X Type (+ N 1) Ys List))
+
+(define ensure-const
+  X Type List -> (ensure-const* X Type 0 List List))
+
+(define const
+  X Type C -> (let R (ensure-const X Type (context-const C))
+                   . (context-const-> C (snd R))
+                (fst R)))
 
 (define reg->
   To [klvm.reg From] C Acc -> (loadreg To From C Acc)
@@ -136,7 +148,7 @@
   [Type Name Args Frame-size Frame-size-extra Code] S+ B Acc ->
   (let Arity (length Args)
        Frame-size' (+ Frame-size S+)
-       C (mk-context Name Type Frame-size' Frame-size-extra Arity Acc [] B)
+       C (mk-context Name Type Frame-size' Frame-size-extra Arity Acc [] [] B)
        X (walk-x1 Code C (mk-code C))
        Acc' (context-toplevel C)
     (emit-func Type Name Args Frame-size' Frame-size-extra X C Acc'))

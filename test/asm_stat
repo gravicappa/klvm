@@ -1,0 +1,138 @@
+#!/bin/sh
+#\
+exec jimsh "$0" "$@"
+
+array set defs {
+  load-reg-> {To From}
+  load-fn-> {To Fn}
+  load-const-> {To Const}
+  jump {+Off}
+  closure-lambda-> {Lambda Nargs}
+  closure-reg-> {Reg Nargs}
+  closure-fn-> {Fn Nargs}
+  closure-tail-lambda-> {Lambda Nargs}
+  closure-tail-reg-> {Reg Nargs}
+  closure-tail-fn-> {Fn Nargs}
+  drop-ret {}
+  load-ret-> Reg
+  call {}
+  tail-call {}
+  jump-unless {Reg +Off}
+  ret-reg Reg
+  ret-fn Fn
+  ret-const Const
+  push-error-handler Reg
+  pop-error-handler {}
+}
+
+proc % {x n} {format %4.2f%% [expr {100.0 * $x / $n}]}
+
+proc show_stat_item {var obj {keys {min max <4 <8 <128 <256}}} {
+  upvar 1 $var x
+  set name [lindex [split $obj /] end]
+  puts "  $name:"
+  puts [format "    %5s: %8.2f" avg [expr {1.0 * $x($obj/sum) / $x($obj/n)}]]
+  foreach key $keys {
+    if {[info exists x($obj/$key)]} {
+      set pc [expr {100.0 * $x($obj/$key) / $x($obj/n)}]
+      puts [format "    %5s: %5d %8.2f%%"  $key $x($obj/$key) $pc]
+    }
+  }
+}
+
+proc show_stat {var} {
+  global defs
+  upvar 1 $var stat
+  puts "global"
+  puts "  nfuncs: $stat(%func/n)"
+  puts "  nclosures: $stat(%closure/n)"
+  puts "  ntoplevels: $stat(%toplevel/n)"
+  show_stat_item stat nconst
+  puts ""
+  foreach {op args} [array get defs] {
+    puts "$op [join $args " "]"
+    puts "  n: $stat($op/n) [% $stat($op/n) $stat(n)]"
+    foreach arg $args {
+      show_stat_item stat $op/$arg
+    }
+    puts ""
+  }
+}
+
+proc count_item {var key val} {
+  upvar 1 $var stat
+  incr stat($key/n)
+  incr stat($key/sum) $val
+  if {![info exists stat($key/max)] || $stat($key/max) < $val} {
+    set stat($key/max) $val
+  }
+  if {![info exists stat($key/min)] || $stat($key/min) > $val} {
+    set stat($key/min) $val
+  }
+  if {$val < 4} {
+    incr stat($key/<4)
+  } elseif {$val < 8} {
+    incr stat($key/<8)
+  } elseif {$val < 128} {
+    incr stat($key/<128)
+  } elseif {$val < 256} {
+    incr stat($key/<256)
+  }
+}
+
+proc init_stat {var} {
+  global defs
+  upvar 1 $var stat
+  foreach op [array names defs] {
+    set stat($op/n) 0
+    foreach arg $defs($op) {
+      set stat($op/$arg/n) 0
+      set stat($op/$arg/sum) 0
+    }
+  }
+  foreach x {%func %toplevel %closure} {
+    set stat($x/n) 0
+  }
+}
+
+proc parse {} {
+  global defs
+  set nconst 0
+  set func {}
+  init_stat stat
+  while {[gets stdin line] >= 0} {
+    switch -glob -- $line {
+      {} {}
+      {const *} {incr nconst}
+      {klvm.s1.*} {
+        set type [lindex [split [lindex $line 0] .] end]
+        incr stat(%$type/n)
+        if {$func ne {}} {
+          incr stat(nconst/n)
+          count_item stat nconst $nconst
+        }
+        set nconst 0
+        set func [lindex $line 1]
+      }
+      default {
+        set args [lassign $line op]
+        incr stat(n)
+        incr stat($op/n)
+        foreach arg $defs($op) val $args {
+          if {$arg eq {}} break
+          count_item stat $op/$arg $val
+        }
+      }
+    }
+  }
+  #parray stat
+  show_stat stat
+}
+
+proc main {} {
+  parse
+}
+
+if {!$tcl_interactive} {
+  main
+}

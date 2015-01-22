@@ -1,4 +1,5 @@
 (package klvm.bytecode.bin [klvm.bytecode.walk klvm.bytecode.mk-backend
+                            klvm.bytecode.def-enum
                             klvm.bytecode-from-kl
 
                             binary.mkbuf
@@ -9,33 +10,45 @@
                             klvm.lambda
                             klvm.reg]
 
-(set opcode-count 128)
+(klvm.bytecode.def-enum
+  const.type.nil
+  const.type.s16
+  const.type.s32
+  const.type.func
+  const.type.str
+  const.type.sym
+  const.type.vec)
 
-(define opcode
-  -> (let X (value opcode-count)
-          . (set opcode-count (+ X 1))
-        X))
+(klvm.bytecode.def-enum
+  op.load-reg->
+  op.load-fn->
+  op.load-const->
+  op.jump
+  op.closure-lambda->
+  op.closure-reg->
+  op.closure-fn->
+  op.closure-tail-lambda->
+  op.closure-tail-reg->
+  op.closure-tail-fn->
+  op.drop-ret
+  op.load-ret->
+  op.call
+  op.tail-call
+  op.jump-unless
+  op.ret-reg
+  op.ret-fn
+  op.ret-const
+  op.push-error-handler
+  op.pop-error-handler)
 
-(set op.load-reg-> (opcode))
-(set op.load-fn-> (opcode))
-(set op.load-const-> (opcode))
-(set op.jump (opcode))
-(set op.closure-lambda-> (opcode))
-(set op.closure-reg-> (opcode))
-(set op.closure-fn-> (opcode))
-(set op.closure-tail-lambda-> (opcode))
-(set op.closure-tail-reg-> (opcode))
-(set op.closure-tail-fn-> (opcode))
-(set op.drop-ret (opcode))
-(set op.load-ret-> (opcode))
-(set op.call (opcode))
-(set op.tail-call (opcode))
-(set op.jump-unless (opcode))
-(set op.ret-reg (opcode))
-(set op.ret-fn (opcode))
-(set op.ret-const (opcode))
-(set op.push-error-handler (opcode))
-(set op.pop-error-handler (opcode))
+(define const-type
+  [] -> nil
+  X -> bool where (boolean? X)
+  X -> str where (string? X)
+  X -> sym where (symbol? X)
+  X -> i16 where (and (number? X) (<= (binary.sint-size X) 2))
+  X -> i32 where (and (number? X) (<= (binary.sint-size X) 4))
+  X -> i64 where (and (number? X) (<= (binary.sint-size X) 8)))
 
 (define native
   _ _ -> (fail))
@@ -52,19 +65,29 @@
 (define prep-code
   Buf -> (binary.buf-buf Buf))
 
-(define const
-  X C -> X)
-
 (define loadreg
-  To From _ Buf -> (do (binary.put-u8 (value op.load-reg->) Buf)
-                       (binary.put-uint To Buf)
-                       (binary.put-uint From Buf)))
+  To From _ Buf -> (do (binary.put-u8 (op.load-reg->) Buf)
+                       (binary.put-u8 To Buf)
+                       (binary.put-u8 From Buf))
+                   where (and (< To 256) (< From 256))
+  To From _ Buf -> (error "klvm.binary.loadreg: register numbers > 256"))
+
+(define loadfn*
+  To From-idx C Buf -> (do (binary.put-u8 (op.load-fn->) Buf)
+                           (binary.put-u8 To Buf)
+                           (binary.put-u8 From-idx Buf))
+                   where (and (< To 256) (< From-idx 256))
+  To From _ Buf -> (error "klvm.binary.loadfn: register numbers > 256"))
+
+(define loadfn
+  To From C Buf -> (loadfn* To (klvm.bytecode.const* From fn C) C Buf))
+
 
 (set backend (klvm.bytecode.mk-backend native mk-code code-len code-append!
-                                       prep-code const loadreg loadfn
-                                       loadconst jump closure-> closure-tail->
-                                       funcall tailcall if-reg-expr retreg
-                                       retfn retconst push-error-handler
+                                       prep-code loadreg loadfn loadconst jump
+                                       closure-> closure-tail-> funcall
+                                       tailcall if-reg-expr retreg retfn
+                                       retconst push-error-handler
                                        pop-error-handler emit-func))
 
 (define walk
