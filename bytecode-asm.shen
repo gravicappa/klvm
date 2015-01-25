@@ -9,7 +9,7 @@
                             klvm.reg
                             
                             klvm.load-reg->
-                            klvm.load-fn->
+                            klvm.load-lambda->
                             klvm.load-const->
                             klvm.jump
                             klvm.closure-lambda->
@@ -55,8 +55,9 @@
 (define loadreg
   To From _ Acc -> [[klvm.load-reg-> To From] | Acc])
 
-(define loadfn
-  To X C Acc -> [[klvm.load-fn-> To (klvm.bytecode.const X func C)] | Acc])
+(define loadlambda
+  To X C Acc -> (let X' (klvm.bytecode.const X lambda C)
+                  [[klvm.load-lambda-> To X'] | Acc]))
 
 (define loadconst
   To X C Acc -> [[klvm.load-const-> To (const X C)] | Acc])
@@ -114,8 +115,8 @@
     [[Type Name Args Frame-size Frame-size-extra Const Code'] | Acc]))
 
 (set backend (klvm.bytecode.mk-backend [] mk-code code-len code-append
-                                       prep-code loadreg loadfn loadconst jump
-                                       closure-> closure-tail-> funcall
+                                       prep-code loadreg loadlambda loadconst
+                                       jump closure-> closure-tail-> funcall
                                        tailcall if-reg-expr retreg retfn
                                        retconst push-error-handler
                                        pop-error-handler emit-func))
@@ -135,6 +136,17 @@
 (define str-join
   List Sep F -> (str-join* List Sep F ""))
 
+(define esc-str*
+  "" Ret -> Ret
+  (@s C Cs) Ret -> (esc-str* Cs (cn Ret "\c#34;")) where (= C "c#34;")
+  (@s C Cs) Ret -> (esc-str* Cs (cn Ret "\n")) where (= C "c#10;")
+  (@s C Cs) Ret -> (esc-str* Cs (cn Ret "\r")) where (= C "c#13;")
+  (@s C Cs) Ret -> (esc-str* Cs (cn Ret C)))
+
+(define esc-const
+  X -> (esc-str* X "") where (string? X)
+  X -> X)
+
 (define comment
   "" -> ""
   X -> (cn " ; " X))
@@ -144,14 +156,14 @@
   (let Op' (klvm.bytecode.cut-package Op)
        C (map (/. I (head (<-vector Const I))) (map (+ 1) Const-idc))
        . (pr (str-join [Op' | Args] " " "~S") Stream)
-       . (pr (comment (str-join C " " "~S")) Stream)
+       . (pr (esc-const (comment (str-join C " " "~S"))) Stream)
        . (pr (n->string 10) Stream)
     true))
 
 (define print-op
   Op [A B] Const Stream -> (print-op* Op [A B] [B] Const Stream)
                            where (element? Op [klvm.load-const->
-                                               klvm.load-fn->])
+                                               klvm.load-lambda->])
 
   Op [A] Const Stream -> (print-op* ret-fn [A] [A] Const Stream)
                          where (element? Op [klvm.ret-const klvm.ret-fn])
@@ -169,23 +181,13 @@
   [[Op | Args] | Ops] Const Stream -> (do (print-op Op Args Const Stream)
                                           (print-func-code Ops Const Stream)))
 
-\*
-  load-const-> _ X
-  load-fn-> _ X
-  ret-const X
-  closure-lambda-> X _
-  closure-fn-> X _
-  closure-tail-lambda-> X _
-  closure-tail-fn-> X _
-  ret-fn X
-*\
-
 (define print-const-table
   [] Stream -> true
-  [[X | Type] | Cs] Stream -> (let T' (klvm.bytecode.cut-package Type)
-                                   . (pr (make-string "const ~A ~S~%" T' X)
-                                         Stream)
-                                (print-const-table Cs Stream)))
+  [[X _ | Type] | Cs] Stream -> (let T' (klvm.bytecode.cut-package Type)
+                                     X' (esc-const X)
+                                     . (pr (make-string "const ~A ~S~%" T' X')
+                                           Stream)
+                                  (print-const-table Cs Stream)))
 
 (define vec<-list*
   [] N N V -> V

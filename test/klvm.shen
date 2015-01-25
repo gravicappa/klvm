@@ -373,3 +373,22 @@
              S1 (klvm.bytecode.asm.walk Kl 3)
              . (output "KLVM.Stage-1:~%~S~%~%" S1)
           true))
+
+(define klvm-test.mk-const
+  -> (vector-> (vector 1) 1 []))
+
+(define klvm-test.ensure-const
+  X Type C -> (let R (klvm.bytecode.ensure-const X Type (<-vector C 1))
+                   . (vector-> C 1 (snd R))
+                (fst R)))
+
+(define klvm-test.consts
+  -> (let C (klvm-test.mk-const)
+          . (klvm-test.ensure-const one sym C)
+          . (output "~S~%" C)
+          . (output "one: ~S~%" (klvm-test.ensure-const one sym C))
+          . (klvm-test.ensure-const 2 num C)
+          . (output "~S~%" C)
+          . (output "one: ~S~%" (klvm-test.ensure-const one sym C))
+        true))
+          

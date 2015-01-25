@@ -4,7 +4,7 @@ exec jimsh "$0" "$@"
 
 array set defs {
   load-reg-> {To From}
-  load-fn-> {To Fn}
+  load-lambda-> {To Fn}
   load-const-> {To Const}
   jump {+Off}
   closure-lambda-> {Lambda Nargs}
@@ -27,15 +27,30 @@ array set defs {
 
 proc % {x n} {format %4.2f%% [expr {100.0 * $x / $n}]}
 
-proc show_stat_item {var obj {keys {min max <4 <8 <128 <256}}} {
-  upvar 1 $var x
+proc sorted_defs {var} {
+  upvar 1 $var stat
+  global defs
+  set list {}
+  foreach op [array names defs] {
+    lappend list [list $op $stat($op/n)]
+  }
+  set ret {}
+  foreach op [lsort -index 1 -decreasing -integer $list] {
+    lappend ret [lindex $op 0]
+  }
+  return $ret
+}
+
+proc show_stat_item {var obj {keys {min max <4 <8 <128 <256 >=256}}} {
+  upvar 1 $var stat
   set name [lindex [split $obj /] end]
   puts "  $name:"
-  puts [format "    %5s: %8.2f" avg [expr {1.0 * $x($obj/sum) / $x($obj/n)}]]
+  set avg [expr {1.0 * $stat($obj/sum) / $stat($obj/n)}]
+  puts [format "    %5s: %8.2f" avg $avg]
   foreach key $keys {
-    if {[info exists x($obj/$key)]} {
-      set pc [expr {100.0 * $x($obj/$key) / $x($obj/n)}]
-      puts [format "    %5s: %5d %8.2f%%"  $key $x($obj/$key) $pc]
+    if {[info exists stat($obj/$key)]} {
+      set pc [expr {100.0 * $stat($obj/$key) / $stat($obj/n)}]
+      puts [format "    %5s: %5d %8.2f%%"  $key $stat($obj/$key) $pc]
     }
   }
 }
@@ -49,7 +64,8 @@ proc show_stat {var} {
   puts "  ntoplevels: $stat(%toplevel/n)"
   show_stat_item stat nconst
   puts ""
-  foreach {op args} [array get defs] {
+  foreach op [sorted_defs stat] {
+    set args $defs($op)
     puts "$op [join $args " "]"
     puts "  n: $stat($op/n) [% $stat($op/n) $stat(n)]"
     foreach arg $args {
@@ -77,6 +93,8 @@ proc count_item {var key val} {
     incr stat($key/<128)
   } elseif {$val < 256} {
     incr stat($key/<256)
+  } else {
+    incr stat($key/>=256)
   }
 }
 
@@ -101,10 +119,10 @@ proc parse {} {
   set func {}
   init_stat stat
   while {[gets stdin line] >= 0} {
-    switch -glob -- $line {
-      {} {}
-      {const *} {incr nconst}
-      {klvm.s1.*} {
+    switch -regexp -- $line {
+      {^[ \t]*$} {}
+      {^const .*} {incr nconst}
+      {^klvm\.s1\..*} {
         set type [lindex [split [lindex $line 0] .] end]
         incr stat(%$type/n)
         if {$func ne {}} {

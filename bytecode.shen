@@ -27,7 +27,7 @@
   (code-append! (A --> A --> A))
   (prep-code (A --> A))
   (loadreg (number --> number --> context --> A --> A))
-  (loadfn (number --> symbol --> context --> A --> A))
+  (loadlambda (number --> symbol --> context --> A --> A))
   (loadconst (number --> B --> context --> A --> A))
   (jump (number --> context --> A --> A))
   (closure-> (unit --> number --> context --> A --> A))
@@ -49,7 +49,7 @@
 (klvm.bytecode.def-backend-fn prep-code (X) C)
 
 (klvm.bytecode.def-backend-fn loadreg (To From C Acc) C)
-(klvm.bytecode.def-backend-fn loadfn (To From C Acc) C)
+(klvm.bytecode.def-backend-fn loadlambda (To From C Acc) C)
 (klvm.bytecode.def-backend-fn loadconst (To X C Acc) C)
 (klvm.bytecode.def-backend-fn jump (Where C Acc) C)
 (klvm.bytecode.def-backend-fn closure-> (X Nargs C Acc) C)
@@ -69,9 +69,9 @@
                               C)
 
 (define ensure-const*
-  X Type N [] List -> (@p N [[X | Type] | List])
-  X Type N [[X | Type] | Ys] List -> (@p N List)
-  X Type N [Y | Ys] List -> (ensure-const* X Type (+ N 1) Ys List))
+  X Type N [] List -> (@p N [[X N | Type] | List])
+  X Type N [[X I | Type] | Ys] List -> (@p I List)
+  X Type N [_ | Ys] List -> (ensure-const* X Type (+ N 1) Ys List))
 
 (define ensure-const
   X Type List -> (ensure-const* X Type 0 List List))
@@ -83,7 +83,7 @@
 
 (define reg->
   To [klvm.reg From] C Acc -> (loadreg To From C Acc)
-  To [klvm.lambda From] C Acc -> (loadfn To From C Acc)
+  To [klvm.lambda From] C Acc -> (loadlambda To From C Acc)
   To X C Acc -> (loadconst To X C Acc) where (klvm.s1.const? X))
 
 (define prepare-args
