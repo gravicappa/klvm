@@ -26,18 +26,18 @@
   (code-len (A --> number))
   (code-append! (A --> A --> A))
   (prep-code (A --> A))
-  (loadreg (number --> number --> context --> A --> A))
-  (loadlambda (number --> symbol --> context --> A --> A))
-  (loadconst (number --> B --> context --> A --> A))
+  (load-reg (number --> number --> context --> A --> A))
+  (load-lambda (number --> symbol --> context --> A --> A))
+  (load-const (number --> B --> context --> A --> A))
   (jump (number --> context --> A --> A))
   (closure-> (unit --> number --> context --> A --> A))
   (closure-tail-> (unit --> number --> context --> A --> A))
   (funcall (A --> context --> A --> A))
   (tailcall (context --> A --> A))
   (if-reg-expr (number --> number --> context --> A --> A))
-  (retreg (number --> context --> A --> A))
-  (retfn (B --> context --> A --> A))
-  (retconst (B --> context --> A --> A))
+  (ret-reg (number --> context --> A --> A))
+  (ret-lambda (B --> context --> A --> A))
+  (ret-const (B --> context --> A --> A))
   (push-error-handler (unit --> context --> A --> A))
   (pop-error-handler (context --> A --> A))
   (emit-func (symbol --> symbol --> (list symbol) --> number --> number
@@ -48,18 +48,18 @@
 (klvm.bytecode.def-backend-fn code-append! (X Y) C)
 (klvm.bytecode.def-backend-fn prep-code (X) C)
 
-(klvm.bytecode.def-backend-fn loadreg (To From C Acc) C)
-(klvm.bytecode.def-backend-fn loadlambda (To From C Acc) C)
-(klvm.bytecode.def-backend-fn loadconst (To X C Acc) C)
+(klvm.bytecode.def-backend-fn load-reg (To From C Acc) C)
+(klvm.bytecode.def-backend-fn load-lambda (To From C Acc) C)
+(klvm.bytecode.def-backend-fn load-const (To X C Acc) C)
 (klvm.bytecode.def-backend-fn jump (Where C Acc) C)
 (klvm.bytecode.def-backend-fn closure-> (X Nargs C Acc) C)
 (klvm.bytecode.def-backend-fn closure-tail-> (X Nargs C Acc) C)
 (klvm.bytecode.def-backend-fn funcall (X C Acc) C)
 (klvm.bytecode.def-backend-fn tailcall (C Acc) C)
 (klvm.bytecode.def-backend-fn if-reg-expr (Reg Else C Acc) C)
-(klvm.bytecode.def-backend-fn retreg (X C Acc) C)
-(klvm.bytecode.def-backend-fn retfn (X C Acc) C)
-(klvm.bytecode.def-backend-fn retconst (X C Acc) C)
+(klvm.bytecode.def-backend-fn ret-reg (X C Acc) C)
+(klvm.bytecode.def-backend-fn ret-lambda (X C Acc) C)
+(klvm.bytecode.def-backend-fn ret-const (X C Acc) C)
 (klvm.bytecode.def-backend-fn push-error-handler (X C Acc) C)
 (klvm.bytecode.def-backend-fn pop-error-handler (C Acc) C)
 
@@ -82,9 +82,9 @@
                 (fst R)))
 
 (define reg->
-  To [klvm.reg From] C Acc -> (loadreg To From C Acc)
-  To [klvm.lambda From] C Acc -> (loadlambda To From C Acc)
-  To X C Acc -> (loadconst To X C Acc) where (klvm.s1.const? X))
+  To [klvm.reg From] C Acc -> (load-reg To From C Acc)
+  To [klvm.lambda From] C Acc -> (load-lambda To From C Acc)
+  To X C Acc -> (load-const To X C Acc) where (klvm.s1.const? X))
 
 (define prepare-args
   [] _ _ Acc -> Acc
@@ -103,9 +103,9 @@
                        (tailcall C Acc)))
 
 (define walk-return
-  [klvm.reg Reg] C Acc -> (retreg Reg C Acc)
-  [klvm.lambda X] C Acc -> (retfn X C Acc)
-  X C Acc -> (retconst X C Acc) where (klvm.s1.const? X))
+  [klvm.reg Reg] C Acc -> (ret-reg Reg C Acc)
+  [klvm.lambda X] C Acc -> (ret-lambda X C Acc)
+  X C Acc -> (ret-const X C Acc) where (klvm.s1.const? X))
 
 (define if-jump
   \\ TODO: optimize zero offset jumps

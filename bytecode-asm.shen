@@ -52,14 +52,14 @@
 (define prep-code
   X -> (reverse X))
 
-(define loadreg
+(define load-reg
   To From _ Acc -> [[klvm.load-reg-> To From] | Acc])
 
-(define loadlambda
+(define load-lambda
   To X C Acc -> (let X' (klvm.bytecode.const X lambda C)
                   [[klvm.load-lambda-> To X'] | Acc]))
 
-(define loadconst
+(define load-const
   To X C Acc -> [[klvm.load-const-> To (const X C)] | Acc])
 
 (define jump
@@ -92,14 +92,14 @@
 (define if-reg-expr
   Reg Else-Offset _ Acc -> [[klvm.jump-unless Reg Else-Offset] | Acc])
 
-(define retreg
+(define ret-reg
   Reg C Acc -> [[klvm.ret-reg Reg] | Acc])
 
-(define retfn
+(define ret-fn
   Fn C Acc -> (let X (klvm.bytecode.const Fn func C)
                 [[klvm.ret-fn X] | Acc]))
 
-(define retconst
+(define ret-const
   X C Acc -> [[klvm.ret-const (const X C)] | Acc])
 
 (define push-error-handler
@@ -115,10 +115,11 @@
     [[Type Name Args Frame-size Frame-size-extra Const Code'] | Acc]))
 
 (set backend (klvm.bytecode.mk-backend [] mk-code code-len code-append
-                                       prep-code loadreg loadlambda loadconst
-                                       jump closure-> closure-tail-> funcall
-                                       tailcall if-reg-expr retreg retfn
-                                       retconst push-error-handler
+                                       prep-code load-reg load-lambda
+                                       load-const jump closure->
+                                       closure-tail-> funcall tailcall
+                                       if-reg-expr ret-reg ret-lambda
+                                       ret-const push-error-handler
                                        pop-error-handler emit-func))
 
 (define walk
