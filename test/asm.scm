@@ -236,7 +236,7 @@
   (define (ret-reg reg)
     (ret (vm-regs-ref vm reg)))
   
-  (define (ret-fn x)
+  (define (ret-lambda x)
     (ret (asm-closure-const-ref pp x)))
   
   (define (ret-const x)
@@ -334,7 +334,7 @@
       ((void-call) (call))
       ((tail-call) (tail-call))
       ((ret-reg) (ret-reg (cadr op)))
-      ((ret-fn) (ret-fn (cadr op)))
+      ((ret-lambda) (ret-lambda (cadr op)))
       ((ret-const) (ret-const (cadr op)))))
   (jmp* pp pi))
 

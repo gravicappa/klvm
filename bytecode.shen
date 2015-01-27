@@ -25,7 +25,7 @@
   (mk-code (--> A))
   (code-len (A --> number))
   (code-append! (A --> A --> A))
-  (prep-code (A --> A))
+  (prep-code (context --> A --> A))
   (load-reg (number --> number --> context --> A --> A))
   (load-lambda (number --> symbol --> context --> A --> A))
   (load-const (number --> B --> context --> A --> A))
@@ -156,7 +156,7 @@
                     X))
 
 (define walk-toplevel
-  [] S B Acc -> ((backend-prep-code B) Acc)
+  [] S B Acc -> ((backend-prep-code B) C Acc)
   [X | Xs] S B Acc -> (walk-toplevel Xs S B (walk-toplevel-expr X S B Acc)))
 
 (define walk

@@ -24,7 +24,7 @@
                             klvm.tail-call
                             klvm.jump-unless
                             klvm.ret-reg
-                            klvm.ret-fn
+                            klvm.ret-lambda
                             klvm.ret-const
                             klvm.push-error-handler
                             klvm.pop-error-handler
@@ -48,9 +48,6 @@
 
 (define code-append
   X Y -> (append Y X))
-
-(define prep-code
-  X -> (reverse X))
 
 (define load-reg
   To From _ Acc -> [[klvm.load-reg-> To From] | Acc])
@@ -93,11 +90,11 @@
   Reg Else-Offset _ Acc -> [[klvm.jump-unless Reg Else-Offset] | Acc])
 
 (define ret-reg
-  Reg C Acc -> [[klvm.ret-reg Reg] | Acc])
+  Reg _ Acc -> [[klvm.ret-reg Reg] | Acc])
 
-(define ret-fn
+(define ret-lambda
   Fn C Acc -> (let X (klvm.bytecode.const Fn func C)
-                [[klvm.ret-fn X] | Acc]))
+                [[klvm.ret-lambda X] | Acc]))
 
 (define ret-const
   X C Acc -> [[klvm.ret-const (const X C)] | Acc])
@@ -113,6 +110,9 @@
   (let Const (reverse (klvm.bytecode.context-const C))
        Code' (reverse Code)
     [[Type Name Args Frame-size Frame-size-extra Const Code'] | Acc]))
+
+(define prep-code
+  _ X -> (reverse X))
 
 (set backend (klvm.bytecode.mk-backend [] mk-code code-len code-append
                                        prep-code load-reg load-lambda
@@ -166,8 +166,8 @@
                            where (element? Op [klvm.load-const->
                                                klvm.load-lambda->])
 
-  Op [A] Const Stream -> (print-op* ret-fn [A] [A] Const Stream)
-                         where (element? Op [klvm.ret-const klvm.ret-fn])
+  Op [A] Const Stream -> (print-op* ret-lambda [A] [A] Const Stream)
+                         where (element? Op [klvm.ret-const klvm.ret-lambda])
 
   Op [A B] Const Stream -> (print-op* Op [A B] [A] Const Stream)
                            where (element? Op [klvm.closure-lambda->

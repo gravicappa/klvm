@@ -1,12 +1,3 @@
-1. [reg-> x y]
-   [reg4-> x x x x y y y y]
-
-2. [x y reg->]
-   [u32 x x x x u32 y y y y reg->]
-
-3. 
-
--------------------------------------------------
 # Structure
 
     module
@@ -39,34 +30,41 @@
       Code: vec
 
 # Opcodes
+All opcodes numbers >= 128. If a 
 
-X  klvm.load-reg-> To From
-X  klvm.load-lambda-> To X
-X  klvm.load-const-> To X
-X  klvm.jump +Off
-N  klvm.closure-lambda-> X Nargs
-XN klvm.closure-reg-> Reg Nargs
-N  klvm.closure-fn-> X Nargs
-N  klvm.closure-tail-lambda-> X Nargs
-XN klvm.closure-tail-reg-> Reg Nargs
-N  klvm.closure-tail-fn-> X Nargs
--  klvm.drop-ret
-X  klvm.load-ret-> Reg
--  klvm.call
--  klvm.tail-call
-XO klvm.jump-unless Reg +Off
-X  klvm.ret-reg Reg
--  klvm.ret-fn X
--  klvm.ret-const X
-X  klvm.push-error-handler Reg
--  klvm.pop-error-handler
-
-X  klvm.+ A B
-X  klvm.- A B
-X  klvm.* A B
-X  klvm./ A B
-X  klvm.< A B
-X  klvm.> A B
-X  klvm.<= A B
-X  klvm.>= A B
+    nop
+    a16 Uint1[2]
+    a32 Uint1[4]
+    b16 Uint1[1]
+    b32 Uint1[3]
+    To load-reg-> From
+    To load-lambda-> X
+    To load-const-> X
+    +Off jump
+    X closure-lambda-> Nargs
+    Reg closure-reg-> Nargs
+    X closure-fn-> Nargs
+    X closure-tail-lambda-> Nargs
+    Reg closure-tail-reg-> Nargs
+    X closure-tail-fn-> Nargs
+    drop-ret
+    Reg load-ret->
+    call
+    tail-call
+    +Off jump-unless Reg
+    Reg ret-reg
+    X ret-lambda
+    X ret-const
+    Reg push-error-handler
+    pop-error-handler
+    A + B
+    A - B
+    A * B
+    A / B
+    A = B
+    A > B
+    A < B
+    A >= B
+    A <= B
+    A /= B
 

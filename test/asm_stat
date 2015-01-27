@@ -19,11 +19,15 @@ array set defs {
   tail-call {}
   jump-unless {Reg +Off}
   ret-reg Reg
-  ret-fn Fn
+  ret-lambda Fn
   ret-const Const
   push-error-handler Reg
   pop-error-handler {}
 }
+
+set stat_keys {min max 0 1 2 3 <4 <8 <128 <256 >=256}
+
+foreach key $stat_keys {set stat_keys_index($key) -}
 
 proc % {x n} {format %4.2f%% [expr {100.0 * $x / $n}]}
 
@@ -41,14 +45,22 @@ proc sorted_defs {var} {
   return $ret
 }
 
-proc show_stat_item {var obj {keys {min max <4 <8 <128 <256 >=256}}} {
+proc show_stat_item {var obj} {
+  global stat_keys stat_keys_index
   upvar 1 $var stat
   set name [lindex [split $obj /] end]
   puts "  $name:"
   set avg [expr {1.0 * $stat($obj/sum) / $stat($obj/n)}]
   puts [format "    %5s: %8.2f" avg $avg]
-  foreach key $keys {
-    if {[info exists stat($obj/$key)]} {
+  set keys {}
+  foreach key [array names stat $obj/*] {
+    set key [lindex [split $key /] end]
+    if {$key ne "sum" && ![info exists stat_keys_index($key)]} {
+      lappend keys $key
+    }
+  }
+  foreach key [concat $stat_keys $keys] {
+    if {[info exists stat($obj/$key)] && $key ni {sum n}} {
       set pc [expr {100.0 * $stat($obj/$key) / $stat($obj/n)}]
       puts [format "    %5s: %5d %8.2f%%"  $key $stat($obj/$key) $pc]
     }
@@ -68,6 +80,16 @@ proc show_stat {var} {
     set args $defs($op)
     puts "$op [join $args " "]"
     puts "  n: $stat($op/n) [% $stat($op/n) $stat(n)]"
+    set keys {}
+    foreach key [array names stat $op/*] {
+      set key [lindex [split $key /] 1]
+      if {$key ni $args && $key ni {n}} {
+        lappend keys $key
+      }
+    }
+    foreach key $keys {
+      puts "  $key: $stat($op/$key) [% $stat($op/$key) $stat($op/n)]"
+    }
     foreach arg $args {
       show_stat_item stat $op/$arg
     }
@@ -85,6 +107,9 @@ proc count_item {var key val} {
   if {![info exists stat($key/min)] || $stat($key/min) > $val} {
     set stat($key/min) $val
   }
+  switch -- $val {
+    0 - 1 - 2 - 3 {incr stat($key/=$val)}
+  } 
   if {$val < 4} {
     incr stat($key/<4)
   } elseif {$val < 8} {
@@ -113,12 +138,12 @@ proc init_stat {var} {
   }
 }
 
-proc parse {} {
+proc parse {var fd} {
+  upvar 1 $var stat
   global defs
   set nconst 0
   set func {}
-  init_stat stat
-  while {[gets stdin line] >= 0} {
+  while {[gets $fd line] >= 0} {
     switch -regexp -- $line {
       {^[ \t]*$} {}
       {^const .*} {incr nconst}
@@ -140,15 +165,32 @@ proc parse {} {
           if {$arg eq {}} break
           count_item stat $op/$arg $val
         }
+        switch -- $op {
+          load-reg-> {
+            if {[lindex $args 0] > [lindex $args 1]} {
+              incr stat($op/arg0>arg1)
+            }
+          }
+        }
       }
     }
   }
   #parray stat
-  show_stat stat
 }
 
 proc main {} {
-  parse
+  global argv
+  init_stat stat
+  if {$argv eq {}} {
+    parse stat stdin
+  } else {
+    foreach file $argv {
+      set fd [open $file]
+      parse stat $fd
+      close $fd
+    }
+  }
+  show_stat stat
 }
 
 if {!$tcl_interactive} {
