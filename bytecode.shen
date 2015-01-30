@@ -32,8 +32,8 @@
   (jump (number --> context --> A --> A))
   (closure-> (unit --> number --> context --> A --> A))
   (closure-tail-> (unit --> number --> context --> A --> A))
-  (funcall (A --> context --> A --> A))
-  (tailcall (context --> A --> A))
+  (funcall (unit --> A --> context --> A --> A))
+  (tailcall (unit --> context --> A --> A))
   (if-reg-expr (number --> number --> context --> A --> A))
   (ret-reg (number --> context --> A --> A))
   (ret-lambda (B --> context --> A --> A))
@@ -95,12 +95,12 @@
   F Nargs Ret-reg X C Acc -> (let Acc (closure-> F Nargs C Acc)
                                   Off (context-frame-size C)
                                   Acc (prepare-args X C Off Acc)
-                               (funcall Ret-reg C Acc)))
+                               (funcall F Ret-reg C Acc)))
 
 (define walk-tailcall
   F Nargs X C Acc -> (let Acc (closure-tail-> F Nargs C Acc)
                           Acc (prepare-args X C 0 Acc)
-                       (tailcall C Acc)))
+                       (tailcall F C Acc)))
 
 (define walk-return
   [klvm.reg Reg] C Acc -> (ret-reg Reg C Acc)

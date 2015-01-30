@@ -107,10 +107,6 @@
   X _ -> (error "Argument is unexpectedly large: ~A" X))
 
 (define op1
-  Op X _ Buf -> (do (arg1 X Buf)
-                    (binary.put-u8 Op Buf)))
-
-(define op2'
   Op Y Buf -> (do (binary.put-u8 Op Buf)
                   (binary.put-u8 Y Buf))
               where (= (binary.uint-size X) 1)
@@ -128,7 +124,7 @@
 
 (define op2
   Op X Y C Buf -> (do (arg1 X Buf)
-                      (op2' Op Y Buf)))
+                      (op1 Op Y Buf)))
 
 (define load-reg
   To From _ Buf -> (op2 (op.load-reg->) To From Buf))
@@ -159,13 +155,13 @@
                      (op2 (op.closure-tail-fn->) X' Nargs Buf)))
 
 (define funcall
-  [] _ Buf -> (do (binary.put-u8 (op.call) Buf)
-                  (binary.put-u8 (op.drop-ret) Buf))
-  Ret-reg _ buf -> (do (binary.put-u8 (op.call))
-                       (op1 (op.load-ret->) Ret-reg Buf)))
+  _ [] _ Buf -> (do (binary.put-u8 (op.call) Buf)
+                    (binary.put-u8 (op.drop-ret) Buf))
+  _ Ret-reg _ buf -> (do (binary.put-u8 (op.call))
+                         (op1 (op.load-ret->) Ret-reg Buf)))
 
 (define tailcall
-  _ Buf -> (binary.put-u8 (op.tail-call)))
+  _ _ Buf -> (binary.put-u8 (op.tail-call)))
 
 (define if-reg-expr
   Reg Else-Offset C Buf -> (let Off' (const Else-Offset C)
@@ -178,10 +174,10 @@
   Fn C Buf -> (op1 (op.ret-lambda) (const Fn func C) Buf))
 
 (define ret-const
-  X C Buf -> (op (op.ret-const) (const X C) Buf))
+  X C Buf -> (op1 (op.ret-const) (const X C) Buf))
 
 (define push-error-handler
-  [klvm.reg Reg] _ Buf -> (op (op.push-error-handler) Reg Buf))
+  [klvm.reg Reg] _ Buf -> (op1 (op.push-error-handler) Reg Buf))
 
 (define pop-error-handler
   _ Buf -> (binary.put-u8 (op.pop-error-handler) Buf))

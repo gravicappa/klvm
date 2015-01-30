@@ -80,11 +80,11 @@
                    where (symbol? X))
 
 (define funcall
-  [] _ Acc -> [[klvm.drop-ret] [klvm.call] | Acc]
-  Ret-reg _ Acc -> [[klvm.load-ret-> Ret-reg] [klvm.call] | Acc])
+  _ [] _ Acc -> [[klvm.drop-ret] [klvm.call] | Acc]
+  _ Ret-reg _ Acc -> [[klvm.load-ret-> Ret-reg] [klvm.call] | Acc])
 
 (define tailcall
-  _ Acc -> [[klvm.tail-call] | Acc])
+  _ _ Acc -> [[klvm.tail-call] | Acc])
 
 (define if-reg-expr
   Reg Else-Offset _ Acc -> [[klvm.jump-unless Reg Else-Offset] | Acc])

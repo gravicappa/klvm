@@ -40,7 +40,7 @@ All opcodes numbers >= 128. If a
     To load-reg-> From
     To load-lambda-> X
     To load-const-> X
-    +Off jump
+    jump +Off 
     X closure-lambda-> Nargs
     Reg closure-reg-> Nargs
     X closure-fn-> Nargs
@@ -48,23 +48,23 @@ All opcodes numbers >= 128. If a
     Reg closure-tail-reg-> Nargs
     X closure-tail-fn-> Nargs
     drop-ret
-    Reg load-ret->
+    load-ret-> Reg
     call
     tail-call
     +Off jump-unless Reg
-    Reg ret-reg
-    X ret-lambda
-    X ret-const
-    Reg push-error-handler
+    ret-reg Reg 
+    ret-lambda X
+    ret-const X
+    push-error-handler Reg 
     pop-error-handler
-    A + B
-    A - B
-    A * B
-    A / B
-    A = B
-    A > B
-    A < B
-    A >= B
-    A <= B
-    A /= B
+    +
+    -
+    *
+    /
+    =
+    >
+    <
+    >=
+    <=
+    /=
 
