@@ -87,4 +87,6 @@
 
 (define walk
   Code -> (walk-aux Code []))
-)
+
+(define translate
+  Code -> (walk-aux Code [])))

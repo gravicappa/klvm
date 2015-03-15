@@ -97,6 +97,7 @@
           ((klvm.func-obj)
            (vm-func-obj (cadr expr) (caddr expr) (vm-closure-code func) vm))
           ((klvm.lambda) (table-ref (vm-closures vm) (cadr expr)))
+          ((klvm.native) (cadr expr))
           (else (error `(unexpected expr2 ,expr))))
         (case expr
           ((true) #t)
@@ -207,3 +208,8 @@
   (clear-log)
   (t1.klvm.setup)
   (test klvm-expr t1.defs))
+
+(define (klvm.test n)
+  (clear-log)
+  (t1.klvm.setup)
+  (klvm-expr (test-ref t1.defs n)))

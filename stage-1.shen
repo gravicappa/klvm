@@ -1,5 +1,5 @@
-(package klvm.s1 [denest.walk klvm-dump klvm.omit-toplevel-constants?
-                  regkl.walk regkl.arg regkl.reg regkl.reg->
+(package klvm.s1 [denest.translate klvm-dump klvm.omit-toplevel-constants?
+                  regkl.translate regkl.arg regkl.reg regkl.reg->
                   regkl.closure regkl.func regkl.toplevel regkl.freeze
                   regkl.trap-error
 
@@ -262,6 +262,7 @@
   regkl.closure -> closure)
 
 (define walk-func
+  regkl.toplevel _ _ _ [] _ _ -> []
   Type Name Args Nregs Body Fn Toplevel -> 
   (let Arity (length Args)
        S (+ Nregs Arity)
@@ -290,7 +291,7 @@
   X -> (/. X (fail)) where (= X _)
   Fn -> Fn)
 
-(define walk
-  Fn X -> (let X' (regkl.walk (map (function denest.walk) X) false)
+(define translate
+  Fn X -> (let X' (regkl.translate (map (function denest.translate) X) false)
                \\. (output "(regkl => ~S)~%" X')
             (walk-toplevel' X' (ensure-native Fn) []))))

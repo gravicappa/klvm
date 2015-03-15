@@ -311,7 +311,7 @@
         [true [shen.f_error call-help]]]]
 
 [defun test-closure-3 []
-  [call-help list-5+2 [cons 1 [cons 2 [cons 3 [cons 4 [cons 5 []]]]]] a b]]
+  [call-help [function list-5+2] [cons 1 [cons 2 [cons 3 [cons 4 [cons 5 []]]]]] a b]]
 
 [defun test-closure-4 []
   [let X 5

@@ -299,6 +299,9 @@
   [X | R] true Acc Toplevel -> (walk-aux R true Acc Toplevel)
   [X | R] false Acc Toplevel -> (walk-aux R false [X | Acc] Toplevel))
 
-(define walk
+(define translate
   Exprs Elim-toplevel-atoms? -> (walk-aux Exprs Elim-toplevel-atoms? [] []))
+
+(define walk
+  Exprs Elim-toplevel-atoms? -> (translate Exprs Elim-toplevel-atoms?))
 )

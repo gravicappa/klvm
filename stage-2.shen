@@ -1,4 +1,4 @@
-(package klvm.s2 [denest.walk
+(package klvm.s2 [denest.translate
                   
                   regkl.trap-error klvm.s2-from-kl
                   
@@ -10,11 +10,14 @@
                   klvm.put-closure-args klvm.reg klvm.reg-> klvm.ret
                   klvm.ret-> klvm.return klvm.runtime klvm.sp+ klvm.sp-
                   klvm.tailcall klvm.tailif klvm.thaw klvm.toplevel klvm.wipe
+                  klvm.lambda
+
+                  klvm.native
 
                   klvm.entry-template klvm.return-template
 
                   klvm.s1.func klvm.s1.closure klvm.s1.toplevel klvm.s1.return
-                  klvm.s1.walk]
+                  klvm.s1.translate]
 
 (defstruct context
   (func-name symbol)
@@ -72,17 +75,24 @@
               [klvm.goto-next]]])
 
 (define call-template
-  Nargs S+ -> [[klvm.sp+ S+]
-               [klvm.nargs-> Nargs]
-               [klvm.put-closure-args]
-               [klvm.call]])
+  [klvm.lambda _] Nargs S+ -> [[klvm.sp+ S+]
+                               [klvm.nargs-> Nargs]
+                               [klvm.call lambda]]
+  _ Nargs S+ -> [[klvm.sp+ S+]
+                 [klvm.nargs-> Nargs]
+                 [klvm.put-closure-args]
+                 [klvm.call]])
 
 (define tailcall-template
-  Nargs Framesize C -> [[klvm.sp- [klvm.nargs]]
-                        [klvm.nargs+ Nargs]
-                        [klvm.put-closure-args]
-                        [klvm.wipe [klvm.nargs]]
-                        [klvm.call]])
+  [klvm.lambda _] Nargs Framesize C -> [[klvm.sp- [klvm.nargs]]
+                                        [klvm.nargs+ Nargs]
+                                        [klvm.wipe [klvm.nargs]]
+                                        [klvm.call lambda]]
+  _ Nargs Framesize C -> [[klvm.sp- [klvm.nargs]]
+                          [klvm.nargs+ Nargs]
+                          [klvm.put-closure-args]
+                          [klvm.wipe [klvm.nargs]]
+                          [klvm.call]])
 
 (define entry-func-name
   Name klvm.s1.func -> Name
@@ -114,7 +124,7 @@
                                      X [[klvm.next-> Next] | Acc]
                                      X [[klvm.closure-> F] | X]
                                      X (prepare-args Prep S C X)
-                                     X (prepend (call-template Nargs S) X)
+                                     X (prepend (call-template F Nargs S) X)
                                      X (label Next C X)
                                      X [[klvm.sp- S] | X]
                                      X (call-ret Ret-reg X)
@@ -128,7 +138,7 @@
                              Acc (prepare-args Prep 0 C Acc)
                              S (+ (context-frame-size C)
                                   (context-frame-size-extra C))
-                          (prepend (tailcall-template Nargs S C) Acc)))
+                          (prepend (tailcall-template F Nargs S C) Acc)))
 
 (define walk-if-expr
   X X-label _ true C Acc -> (walk-x1 X C (label X-label C Acc))
@@ -165,7 +175,7 @@
                              [(return-op X C) | Acc'])
   [klvm.push-error-handler E] C Acc -> [[klvm.push-error-handler E] | Acc]
   [klvm.pop-error-handler] C Acc -> [[klvm.pop-error-handler] | Acc]
-  [klvm.native X] C Acc -> [[klvm.native X] | Acc]
+  [klvm.native X] _ Acc -> [[klvm.native X] | Acc]
   [] _ Acc -> Acc
   X _ _ -> (error "klvm.s2.walk-x1: Unexpected L1 expression: ~S~%" X))
 
@@ -201,7 +211,7 @@
   [] Acc -> (reverse Acc)
   [X | Y] Acc -> (walk-toplevel Y (walk-toplevel-expr X Acc)))
 
-(define walk
+(define translate
   X -> (walk-toplevel X []))
 
 (define klvm.runtime
@@ -215,6 +225,6 @@
                    R]]]]]))
 
 (define klvm.s2-from-kl
-  Fn Kl -> (walk (klvm.s1.walk Fn Kl)))
+  Fn Kl -> (translate (klvm.s1.translate Fn Kl)))
 
 )
