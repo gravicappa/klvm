@@ -4,6 +4,7 @@
                             klvm.bytecode.cut-package
                             klvm.bytecode.const
                             klvm.bytecode.context-const
+                            klvm.bytecode.context-frame-size
 
                             klvm.lambda
                             klvm.reg
@@ -79,12 +80,37 @@
                      [[klvm.closure-tail-fn-> X' Nargs] | Acc])
                    where (symbol? X))
 
+(define arg->
+  To [klvm.reg From] C Acc -> [[klvm.load-reg-> To From] | Acc]
+  To [klvm.lambda L] C Acc -> (let X (klvm.bytecode.const L lambda C)
+                                [[klvm.load-lambda-> To X] | Acc])
+  To X C Acc -> [[klvm.load-const-> To (const X C)] | Acc])
+
+(define call-args
+  [] _ _ C Acc -> Acc
+  [[I | X] | Xs] I J C Acc -> (call-args
+                               Xs (+ I 1) (+ J 1) C (arg-> J X C Acc))
+  [[I | X] | Xs] _ S C Acc -> (error "Non tailcall args is not sequential."))
+
+(define tail-call-args
+  [] _ Acc -> Acc
+  [[I | X] | Xs] C Acc -> (tail-call-args Xs C (arg-> I X C Acc)))
+
+(define load-ret
+  [] Acc -> [[klvm.drop-ret] | Acc]
+  Ret-reg Acc -> [[klvm.load-ret-> Ret-reg] | Acc])
+
 (define funcall
-  _ [] _ Acc -> [[klvm.drop-ret] [klvm.call] | Acc]
-  _ Ret-reg _ Acc -> [[klvm.load-ret-> Ret-reg] [klvm.call] | Acc])
+  F Nargs Ret-reg Args C Acc -> (let Acc (closure-> F Nargs C Acc)
+                                     S (klvm.bytecode.context-frame-size C)
+                                     Acc (call-args Args 0 S C Acc)
+                                     Acc [[klvm.call] | Acc]
+                                  (load-ret Ret-reg Acc)))
 
 (define tailcall
-  _ _ Acc -> [[klvm.tail-call] | Acc])
+  F Nargs Args C Acc -> (let Acc (closure-tail-> F Nargs C Acc)
+                             Acc (tail-call-args Args C Acc)
+                          [[klvm.tail-call] | Acc]))
 
 (define if-reg-expr
   Reg Else-Offset _ Acc -> [[klvm.jump-unless Reg Else-Offset] | Acc])
@@ -115,12 +141,11 @@
   _ X -> (reverse X))
 
 (set backend (klvm.bytecode.mk-backend [] mk-code code-len code-append
-                                       prep-code load-reg load-lambda
-                                       load-const jump closure->
-                                       closure-tail-> funcall tailcall
-                                       if-reg-expr ret-reg ret-lambda
-                                       ret-const push-error-handler
-                                       pop-error-handler emit-func))
+                                       prep-code funcall tailcall load-reg
+                                       load-lambda load-const jump if-reg-expr
+                                       ret-reg ret-lambda ret-const
+                                       push-error-handler pop-error-handler
+                                       emit-func))
 
 (define walk
   X S+ -> (klvm.bytecode.walk X S+ (value backend)))

@@ -25,7 +25,7 @@ array set defs {
   pop-error-handler {}
 }
 
-set stat_keys {min max 0 1 2 3 <4 <8 <128 <256 >=256}
+set stat_keys {min max 0 1 2 3 <4 <8 <64 <128 <256 >=256}
 
 foreach key $stat_keys {set stat_keys_index($key) -}
 
@@ -50,7 +50,10 @@ proc show_stat_item {var obj} {
   upvar 1 $var stat
   set name [lindex [split $obj /] end]
   puts "  $name:"
-  set avg [expr {1.0 * $stat($obj/sum) / $stat($obj/n)}]
+  set avg 0
+  if {[info exists stat($obj/sum)] && $stat($obj/n) > 0} {
+    set avg [expr {1.0 * $stat($obj/sum) / $stat($obj/n)}]
+  }
   puts [format "    %5s: %8.2f" avg $avg]
   set keys {}
   foreach key [array names stat $obj/*] {
@@ -67,6 +70,13 @@ proc show_stat_item {var obj} {
   }
 }
 
+proc val {var key} {
+  upvar 1 $var x
+  set ret {}
+  catch {set ret $x($key)}
+  return $ret
+}
+
 proc show_stat {var} {
   global defs
   upvar 1 $var stat
@@ -74,7 +84,19 @@ proc show_stat {var} {
   puts "  nfuncs: $stat(%func/n)"
   puts "  nclosures: $stat(%closure/n)"
   puts "  ntoplevels: $stat(%toplevel/n)"
+  puts "  const_size_sys: [val stat %const_size_sys]"
+  puts "  const_size_module: [val stat %const_size_module]"
+  puts "  const_size_func: [val stat %const_size_func]"
+  puts "  call_size: [val stat %call_size]"
+  puts "  call_size_2: [val stat %call_size_2]"
+  puts "  call_size_3: [val stat %call_size_3]"
+  puts "  call_size_4: [val stat %call_size_4]"
+  puts "  call_size_5: [val stat %call_size_5]"
+  puts "  to+1: [val stat %to+1]"
   show_stat_item stat nconst
+  show_stat_item stat const
+  show_stat_item stat args
+  show_stat_item stat nargs
   puts ""
   foreach op [sorted_defs stat] {
     set args $defs($op)
@@ -114,6 +136,8 @@ proc count_item {var key val} {
     incr stat($key/<4)
   } elseif {$val < 8} {
     incr stat($key/<8)
+  } elseif {$val < 64} {
+    incr stat($key/<64)
   } elseif {$val < 128} {
     incr stat($key/<128)
   } elseif {$val < 256} {
@@ -140,25 +164,32 @@ proc init_stat {var} {
 
 proc parse {var fd} {
   upvar 1 $var stat
-  global defs
-  set nconst 0
-  set func {}
+  global defs const_table
+  array set ctx {
+    nconst 0
+    func {}
+    call_args 0
+    nargs 0
+  }
+  array unset stat @mod/*
+  array unset stat @func/*
   while {[gets $fd line] >= 0} {
-    switch -regexp -- $line {
-      {^[ \t]*$} {}
-      {^const .*} {incr nconst}
-      {^klvm\.s1\..*} {
-        set type [lindex [split [lindex $line 0] .] end]
-        incr stat(%$type/n)
-        if {$func ne {}} {
+    set line [regsub {;.*$} $line {}]
+    set args [lassign $line op]
+    if {$op eq {}} continue
+    switch -- $op {
+      const {incr ctx(nconst)}
+      klvm.s1.toplevel - klvm.s1.func - klvm.s1.closure {
+        if {$ctx(func) ne {}} {
           incr stat(nconst/n)
-          count_item stat nconst $nconst
+          count_item stat nconst $ctx(nconst)
         }
-        set nconst 0
-        set func [lindex $line 1]
+        lassign $line op ctx(func) x ctx(frame_size) ctx(arity)
+        set ctx(type) [lindex [split $op .] end]
+        set ctx(nconst) 0
+        incr stat(%$ctx(type)/n)
       }
       default {
-        set args [lassign $line op]
         incr stat(n)
         incr stat($op/n)
         foreach arg $defs($op) val $args {
@@ -166,16 +197,255 @@ proc parse {var fd} {
           count_item stat $op/$arg $val
         }
         switch -- $op {
+          closure-lambda-> - closure-reg-> - closure-fn-> -
+          closure-tail-lambda-> - closure-tail-reg-> - closure-tail-fn-> {
+            set ctx(call_args) 1
+            set ctx(prev_to) $ctx(frame_size)
+            set ctx(prev_type) {}
+            set ctx(prev_from) {}
+            set ctx(nargs) [lindex $args 1]
+            set ctx(tail) [string match {*tail*} $op]
+            count_item stat nargs $ctx(nargs)
+          }
           load-reg-> {
-            if {[lindex $args 0] > [lindex $args 1]} {
-              incr stat($op/arg0>arg1)
+            lassign $args to from
+            if {$to > $from} {
+              incr stat($op/to>from)
             }
           }
         }
       }
     }
+    process_funcall $op $args ctx stat
+    process_constsize $op $args ctx stat
+
+    if {$ctx(call_args) && $op in {load-reg-> load-const-> load-lambda->}} {
+      process_callsize $op $args ctx stat
+      process_callsize2 $op $args ctx stat
+      process_callsize3 $op $args ctx stat
+      process_callsize4 $op $args ctx stat
+      process_callsize5 $op $args ctx stat
+    }
+    switch -- $op {
+      call - tail-call {set ctx(call_args) 0}
+      load-reg-> - load-lambda-> - load-const-> {
+        lassign $args ctx(prev_to) ctx(prev_from)
+        set ctx(prev_type) $op
+      }
+    }
   }
   #parray stat
+}
+
+proc process_const {op arg var statvar} {
+}
+
+proc process_funcall {op arg var statvar} {
+  upvar 1 $var ctx
+  upvar 1 $statvar stat
+  switch -- $op {
+    load-reg-> {
+      lassign $arg to from
+      if {$ctx(call_args)} {
+        incr stat($op/in_call)
+        incr stat(args/sum)
+        incr stat(args/n)
+        if {$ctx(prev_to) eq {}} {
+          if {$to == $ctx(frame_size)} {
+            incr stat(args/to=fs)
+          }
+          incr stat(args/to+1)
+        } else {
+          if {$to - 1 == $ctx(prev_to)} {
+            incr stat(args/to+1)
+          }
+          if {$to + 1 eq $ctx(prev_to)} {
+            incr stat(args/to-1)
+          }
+        }
+      }
+    }
+    load-const-> - load-lambda-> {
+      if {$ctx(call_args)} {
+        lassign $arg to x
+        incr stat($op/in_call)
+        incr stat(args/sum)
+        incr stat(args/n)
+        if {$ctx(prev_to) eq {}} {
+          if {$to eq $ctx(frame_size)} {
+            incr stat(args/to=fs)
+          }
+          incr stat(args/to+1)
+        } else {
+          if {$to - 1 == $ctx(prev_to)} {
+            incr stat(args/to+1)
+          }
+          if {$to + 1 == $ctx(prev_to)} {
+            incr stat(args/to-1)
+          }
+        }
+      }
+    }
+    call - tail-call {
+      switch -- $ctx(nargs) {
+        0 - 1 {incr stat(args/$ctx(nargs))}
+      }
+    }
+  }
+}
+
+proc int_size {val} {
+  if {$val < -(2 ** 32)} {
+    return 8
+  } elseif {$val < -65536} {
+    return 4
+  } elseif {$val < -256} {
+    return 2
+  } elseif {$val < 0} {
+    return 1
+  } elseif {$val < 256} {
+    return 1
+  } elseif {$val < 65536} {
+    return 2
+  } elseif {$val < 2 ** 32} {
+    return 4
+  } else {
+    return 8
+  }
+}
+
+proc coded_int_size {val} {
+  if {$val >= 0 && $val < 128} {
+    return 1
+  }
+  expr {[int_size $val] + 1}
+}
+
+proc const_size {type val} {
+  switch -- $type {
+    num {
+      set s [int_size $val]
+      switch -- $s {
+        1 {return 1}
+        default {expr {$s + 1}}
+      }
+    }
+    bool - nil {return 1}
+    lambda - func - sym - str {expr {1 + 4 + [string length $val]}}
+  }
+}
+
+proc process_constsize {op arg var statvar} {
+  upvar 1 $var ctx
+  upvar 1 $statvar stat
+  switch -- $op {
+    const {
+      #puts stderr [list const: $arg]
+      lassign $arg type val
+      set size [const_size $type $val]
+      if {[info exists stat(@sys/$type/$val)]} {
+        incr stat(%const_size_sys) 4
+      } else {
+        incr stat(%const_size_sys) $size
+        set stat(@sys/$type/$val) -
+      }
+      if {[info exists stat(@mod/$type/$val)]} {
+        incr stat(%const_size_module) 4
+      } else {
+        incr stat(%const_size_module) $size
+        set stat(@mod/$type/$val) -
+      }
+      incr stat(%const_size_func) $size
+      incr stat(const/n)
+      incr stat(const/$type)
+    }
+  }
+}
+
+proc process_callsize {op arg var statvar} {
+  upvar 1 $var ctx
+  upvar 1 $statvar stat
+  lassign $arg to from
+  set to_size [int_size $to]
+  set from_size [int_size $from]
+  incr stat(%call_size) 1
+  incr stat(%call_size) [coded_int_size $to]
+  incr stat(%call_size) [coded_int_size $from]
+}
+
+proc process_callsize2 {op arg var statvar} {
+  upvar 1 $var ctx
+  upvar 1 $statvar stat
+  lassign $arg to from
+  if {$op in {load-const-> load-lambda->}} {
+    incr stat(%call_size_2) 1
+  }
+  if {$to != $ctx(prev_to) + 1} {
+    incr stat(%call_size_2) 1
+    incr stat(%call_size_2) [coded_int_size $to]
+  } else {
+    incr stat(%to+1)
+  }
+  incr stat(%call_size_2) [coded_int_size $from]
+  set ctx(prev_type) $op
+}
+
+proc process_callsize3 {op arg var statvar} {
+  upvar 1 $var ctx
+  upvar 1 $statvar stat
+  lassign $arg to from
+  if {$op in {load-const-> load-lambda->}} {
+    incr stat(%call_size_3) 1
+  }
+  incr stat(%call_size_3) [coded_int_size $from]
+  incr stat(%call_size_3) [coded_int_size $to]
+}
+
+proc process_callsize4 {op arg var statvar} {
+  upvar 1 $var ctx
+  upvar 1 $statvar stat
+  lassign $arg to from
+  if {$op in {load-const-> load-lambda->}} {
+    incr stat(%call_size_4) 1
+  }
+  if {$ctx(tail)} {
+    incr stat(%call_size_4) [coded_int_size $from]
+    incr stat(%call_size_4) [coded_int_size $to]
+  } else {
+    incr stat(%call_size_4) [coded_int_size $from]
+  }
+}
+
+proc arg_size5 {op x} {
+  if {$op in {load-const-> load-lambda->}} {
+    if {$x < 64} {
+      return 1
+    } elseif {$x < 256} {
+      return 2
+    } else {
+      return [expr {1 + [int_size $x]}]
+    }
+  } else {
+    return [coded_int_size $x]
+  }
+}
+
+proc process_callsize5 {op arg var statvar} {
+  upvar 1 $var ctx
+  upvar 1 $statvar stat
+  lassign $arg to from
+  if {$op in {load-const-> load-lambda->}} {
+    if {$from < 64} {
+    } elseif {$from < 128 } {
+      incr stat(%call_size_5) 1
+    }
+  }
+  if {$ctx(tail)} {
+    incr stat(%call_size_5) [arg_size5 $op $from]
+    incr stat(%call_size_5) [coded_int_size $to]
+  } else {
+    incr stat(%call_size_5) [arg_size5 $op $from]
+  }
 }
 
 proc main {} {

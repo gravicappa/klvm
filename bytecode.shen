@@ -26,14 +26,12 @@
   (code-len (A --> number))
   (code-append! (A --> A --> A))
   (prep-code (context --> A --> A))
+  (funcall (unit --> number --> A --> unit --> context --> B --> B))
+  (tailcall (unit --> number --> unit --> context --> B --> B))
   (load-reg (number --> number --> context --> A --> A))
   (load-lambda (number --> symbol --> context --> A --> A))
   (load-const (number --> B --> context --> A --> A))
   (jump (number --> context --> A --> A))
-  (closure-> (unit --> number --> context --> A --> A))
-  (closure-tail-> (unit --> number --> context --> A --> A))
-  (funcall (unit --> A --> context --> A --> A))
-  (tailcall (unit --> context --> A --> A))
   (if-reg-expr (number --> number --> context --> A --> A))
   (ret-reg (number --> context --> A --> A))
   (ret-lambda (B --> context --> A --> A))
@@ -48,14 +46,12 @@
 (klvm.bytecode.def-backend-fn code-append! (X Y) C)
 (klvm.bytecode.def-backend-fn prep-code (X) C)
 
+(klvm.bytecode.def-backend-fn funcall (F Nargs Ret-reg Args C Acc) C)
+(klvm.bytecode.def-backend-fn tailcall (F Nargs Args C Acc) C)
 (klvm.bytecode.def-backend-fn load-reg (To From C Acc) C)
 (klvm.bytecode.def-backend-fn load-lambda (To From C Acc) C)
 (klvm.bytecode.def-backend-fn load-const (To X C Acc) C)
 (klvm.bytecode.def-backend-fn jump (Where C Acc) C)
-(klvm.bytecode.def-backend-fn closure-> (X Nargs C Acc) C)
-(klvm.bytecode.def-backend-fn closure-tail-> (X Nargs C Acc) C)
-(klvm.bytecode.def-backend-fn funcall (X C Acc) C)
-(klvm.bytecode.def-backend-fn tailcall (C Acc) C)
 (klvm.bytecode.def-backend-fn if-reg-expr (Reg Else C Acc) C)
 (klvm.bytecode.def-backend-fn ret-reg (X C Acc) C)
 (klvm.bytecode.def-backend-fn ret-lambda (X C Acc) C)
@@ -83,7 +79,7 @@
 
 (define reg->
   To [klvm.reg From] C Acc -> (load-reg To From C Acc)
-  To [klvm.lambda From] C Acc -> (load-lambda To From C Acc)
+  To [klvm.lambda L] C Acc -> (load-lambda To L C Acc)
   To X C Acc -> (load-const To X C Acc) where (klvm.s1.const? X))
 
 (define prepare-args
@@ -91,16 +87,40 @@
   [[I | X] | Xs] C Off Acc -> (let Acc (reg-> (+ I Off) X C Acc)
                                 (prepare-args Xs C Off Acc)))
 
+(define arg->
+  [klvm.reg From] C Acc -> (arg-reg From C Acc)
+  [klvm.lambda L] C Acc -> (arg-lambda L C Acc)
+  X C Acc -> (arg-const X C Acc))
+
+(define tail-arg->
+  To [klvm.reg From] C Acc -> (tail-arg-reg To From C Acc)
+  To [klvm.lambda L] C Acc -> (tail-arg-lambda To L C Acc)
+  To X C Acc -> (tail-arg-const To X C Acc))
+
+(define put-call-args
+  [] _ Acc -> Acc
+  [[I | X] | Xs] I Acc -> (put-call-args Xs (+ I 1) (arg-> X Acc))
+  [[I | X] | Xs] Off Acc -> (error "Non tailcall args is not sequential."))
+
+(define put-tail-call-args
+  [] _ Acc -> Acc
+  [[I | X] | Xs] _ Acc -> (put-tail-call-args Xs (tail-arg-> I X Acc)))
+
 (define walk-call
   F Nargs Ret-reg X C Acc -> (let Acc (closure-> F Nargs C Acc)
-                                  Off (context-frame-size C)
-                                  Acc (prepare-args X C Off Acc)
+                                  Acc (put-call-args X C Acc)
                                (funcall F Ret-reg C Acc)))
 
 (define walk-tailcall
   F Nargs X C Acc -> (let Acc (closure-tail-> F Nargs C Acc)
-                          Acc (prepare-args X C 0 Acc)
+                          Acc (put-tail-call-args X C Acc)
                        (tailcall F C Acc)))
+
+(define walk-call
+  F Nargs Ret-reg Args C Acc -> (funcall F Nargs Ret-reg Args C Acc))
+
+(define walk-tailcall
+  F Nargs Args C Acc -> (tailcall F Nargs Args C Acc))
 
 (define walk-return
   [klvm.reg Reg] C Acc -> (ret-reg Reg C Acc)
@@ -156,7 +176,7 @@
                     X))
 
 (define walk-toplevel
-  [] S B Acc -> ((backend-prep-code B) C Acc)
+  [] S B Acc -> ((backend-prep-code B) _ Acc)
   [X | Xs] S B Acc -> (walk-toplevel Xs S B (walk-toplevel-expr X S B Acc)))
 
 (define walk
@@ -164,3 +184,4 @@
               (walk-toplevel (klvm.s1.walk (backend-native B) X) S+ B Code)))
 
 )
+

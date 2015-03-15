@@ -40,7 +40,6 @@
   op.closure-tail-fn->
   op.drop-ret
   op.load-ret->
-  op.call
   op.tail-call
   op.jump-unless
   op.ret-reg
@@ -58,6 +57,12 @@
   op.>=
   op.<=
   op./=)
+
+(define arg.const1 -> (bin 10000000))
+(define arg.const2 -> (bin 11000000))
+(define arg.const3 -> (bin 11100000))
+(define arg.reg2 -> (bin 11111111))
+(define arg.reg3 -> (bin 11111110))
 
 (define const-type
   [] -> nil
@@ -107,20 +112,20 @@
   X _ -> (error "Argument is unexpectedly large: ~A" X))
 
 (define op1
-  Op Y Buf -> (do (binary.put-u8 Op Buf)
-                  (binary.put-u8 Y Buf))
+  Op X Buf -> (do (binary.put-u8 Op Buf)
+                  (binary.put-u8 X Buf))
               where (= (binary.uint-size X) 1)
-  Op Y Buf -> (do (binary.put-u8 (op.b16) Buf)
+  Op X Buf -> (do (binary.put-u8 (op.b16) Buf)
                   (binary.put-u8 (binary.int#1 X) Buf)
                   (op2' Op (binary.int#2 X) Buf))
               where (= (binary.uint-size X) 2)
-  Op Y Buf -> (do (binary.put-u8 (op.b32) Buf)
+  Op X Buf -> (do (binary.put-u8 (op.b32) Buf)
                   (binary.put-u8 (binary.int#1 X) Buf)
                   (binary.put-u8 (binary.int#2 X) Buf)
                   (binary.put-u8 (binary.int#3 X) Buf)
                   (op2' Op (binary.int#4 X) Buf))
               where (= (binary.uint-size X) 4)
-  _ Y _ -> (error "Argument is unexpectedly large: ~A" Y))
+  _ X _ -> (error "Argument is unexpectedly large: ~A" X))
 
 (define op2
   Op X Y C Buf -> (do (arg1 X Buf)
@@ -137,7 +142,7 @@
   To X C Buf -> (op2 (op.load-const->) To (const X C) Buf))
 
 (define jump
-  Where _ Buf -> (op1 (op.jump) (const Where C) Buf))
+  Where C Buf -> (op1 (op.jump) (const Where C) Buf))
 
 (define closure->
   [klvm.lambda L] Nargs C Buf -> (let X (klvm.bytecode-const* L lambda C)
@@ -147,9 +152,9 @@
                      (op2 (op.closure-fn->) X' Nargs Buf)))
 
 (define closure-tail->
-  [klvm.lambda L] Nargs C Buf-> (let X (klvm.bytecode-const* L lambda C)
-                                  (op2 (op.closure-tail-lambda->) X Nargs
-                                       Buf))
+  [klvm.lambda L] Nargs C Buf -> (let X (klvm.bytecode-const* L lambda C)
+                                   (op2 (op.closure-tail-lambda->) X Nargs
+                                        Buf))
   [klvm.reg R] Nargs C Buf -> (op2 (op.closure-tail-reg->) R Nargs Buf)
   X Nargs C Buf -> (let X' (klvm.bytecode-const* X func C)
                      (op2 (op.closure-tail-fn->) X' Nargs Buf)))
@@ -157,8 +162,41 @@
 (define funcall
   _ [] _ Buf -> (do (binary.put-u8 (op.call) Buf)
                     (binary.put-u8 (op.drop-ret) Buf))
-  _ Ret-reg _ buf -> (do (binary.put-u8 (op.call))
+  _ Ret-reg _ Buf -> (do (binary.put-u8 (op.call))
                          (op1 (op.load-ret->) Ret-reg Buf)))
+
+(define encode-const-arg
+  X Buf -> (binary.put-u8 (+ X (arg.const1)) Buf) where (<= X 63)
+
+  X Buf -> (do (binary.put-u8 (+ (binary.bitwise-and X 31) (arg.const2)) Buf)
+               (binary.put-u8 (binary.arithmetic-shift X -5) Buf))
+           where (<= X (xbin (| (<< 255 5) 31)))
+
+  X Buf -> (do (binary.put-u8 (+ (binary.bitwise-and X 15) (arg.const3)) Buf)
+               (binary.put-u8 (binary.bitwise-ior
+                               (binary.arithmetic-shift X -4) 255)
+                              Buf)
+               (binary.put-u8 (binary.bitwise-ior
+                               (binary.arithmetic-shift X -12) 255)
+                              Buf))
+           where (<= X (xbin (| (<< 65535 12) (<< 255 4) 15)))
+
+  X _ -> (error "Const argument is unexpectedly large: ~A" X))
+
+(define call-arg
+  [klvm.reg From] _ Buf -> (arg1 From Buf)
+  [klvm.lambda L] C Buf -> (let X (klvm.bytecode-const* L lambda C)
+                             (encode-const-arg X Buf))
+  X C Buf -> (encode-const-arg (const X C) Buf))
+
+(define put-call-args
+  [] _ C Buf -> Buf
+  [[I | X] | Xs] I C Buf -> (put-call-args Xs (+ I 1) C (call-arg X C Buf))
+  [[I | X] | Xs] _ C Buf -> (error "Non tailcall args is not sequential."))
+
+(define funcall
+  F Nargs Ret-reg Args C Buf -> (let Buf (closure-> F Nargs C Buf)
+                                  (call-args Args 0 C Buf)))
 
 (define tailcall
   _ _ Buf -> (binary.put-u8 (op.tail-call)))
@@ -192,10 +230,9 @@
   C Buf -> (binary.buf-buf Buf))
 
 (set backend (klvm.bytecode.mk-backend native mk-code code-len code-append!
-                                       prep-code load-reg load-lambda
-                                       load-const jump closure->
-                                       closure-tail-> funcall tailcall
-                                       if-reg-expr retreg retfn retconst
+                                       prep-code funcall tailcall load-reg
+                                       load-lambda load-const jump if-reg-expr
+                                       retreg retfn retconst
                                        push-error-handler pop-error-handler
                                        emit-func))
 
