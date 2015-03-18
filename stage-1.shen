@@ -262,7 +262,7 @@
   regkl.closure -> closure)
 
 (define walk-func
-  regkl.toplevel _ _ _ [] _ _ -> []
+  regkl.toplevel _ _ _ [] _ Toplevel -> Toplevel
   Type Name Args Nregs Body Fn Toplevel -> 
   (let Arity (length Args)
        S (+ Nregs Arity)
@@ -282,9 +282,9 @@
                    where (not (value klvm.omit-toplevel-constants?))
   X _ Toplevel -> Toplevel)
 
-(define walk-toplevel'
+(define walk-toplevel
   [] _ Acc -> (reverse Acc)
-  [X | Y] Fn Acc -> (walk-toplevel' Y Fn (walk-1 X Fn Acc)))
+  [X | Y] Fn Acc -> (walk-toplevel Y Fn (walk-1 X Fn Acc)))
 
 (define ensure-native
   [] -> (/. X (fail))
@@ -294,4 +294,4 @@
 (define translate
   Fn X -> (let X' (regkl.translate (map (function denest.translate) X) false)
                \\. (output "(regkl => ~S)~%" X')
-            (walk-toplevel' X' (ensure-native Fn) []))))
+            (walk-toplevel X' (ensure-native Fn) []))))
