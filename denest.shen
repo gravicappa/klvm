@@ -34,9 +34,6 @@
 (define walk-freeze
   X Let Env -> (@p [freeze (walk-aux X Env)] Let))
 
-(define walk-shortcut
-  Op X Y Let Env F -> (walk-expr (F X Y) Let Env))
-
 (define and-fn
   X Y -> [if X Y false])
 

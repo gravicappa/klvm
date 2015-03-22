@@ -125,7 +125,7 @@
   X V Env Used-in-body Used Unext C true
   -> (let Used' (remove X Used-in-body)
           Unext' (append Used' Unext)
-          Unused (difference (map head Env) Unext')
+          Unused (difference (map (function head) Env) Unext')
           I (new-var-idx-or-reuse X Env Unused)
           _ (context-nregs-> C (max (+ I 1) (context-nregs C)))
           Env' (add-var X I Env)
