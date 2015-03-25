@@ -225,6 +225,7 @@
                    R]]]]]))
 
 (define klvm.s2-from-kl
-  Fn Kl -> (translate (klvm.s1.translate Fn Kl)))
+  Fn Kl Elim-toplevel-atoms? -> (translate (klvm.s1.translate
+                                            Fn Kl Elim-toplevel-atoms?)))
 
 )

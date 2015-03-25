@@ -287,6 +287,7 @@
   [X | Y] -> [do | (reverse [X | Y])])
 
 (define walk-toplevel
+  [] Acc -> Acc
   X Acc -> (let Name (gensym shen-toplevel-)
              (walk-defun Name [] (toplevel-do X) true Acc)))
 

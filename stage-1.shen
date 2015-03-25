@@ -1,4 +1,4 @@
-(package klvm.s1 [denest.translate klvm-dump klvm.omit-toplevel-constants?
+(package klvm.s1 [denest.translate klvm-dump
                   regkl.translate regkl.arg regkl.reg regkl.reg->
                   regkl.closure regkl.func regkl.toplevel regkl.freeze
                   regkl.trap-error
@@ -15,8 +15,6 @@
   (frame-size-extra number)
   (toplevel s-expr)
   (native (A --> context --> A)))
-
-(set klvm.omit-toplevel-constants? true)
 
 (define warning X -> (output "Warning: ~A" X))
 (define warn-type -> (warning "`type` expression is not supported yet"))
@@ -278,9 +276,7 @@
   where (element? Type [regkl.func regkl.toplevel])
   [X | Y] _ _ -> (error "Unexpected toplevel expression ~S~%" [X | Y])
   X Fn Toplevel -> (walk-func
-                    regkl.toplevel (gensym toplevel) [] 0 X Fn Toplevel)
-                   where (not (value klvm.omit-toplevel-constants?))
-  X _ Toplevel -> Toplevel)
+                    regkl.toplevel (gensym toplevel) [] 0 X Fn Toplevel))
 
 (define walk-toplevel
   [] _ Acc -> (reverse Acc)
@@ -292,6 +288,8 @@
   Fn -> Fn)
 
 (define translate
-  Fn X -> (let X' (regkl.translate (map (function denest.translate) X) false)
-               \\. (output "(regkl => ~S)~%" X')
-            (walk-toplevel X' (ensure-native Fn) []))))
+  Fn X Elim-toplevel-atoms? -> (let X' (regkl.translate
+                                        (map (function denest.translate) X)
+                                        Elim-toplevel-atoms?)
+                                    \\. (output "(regkl => ~S)~%" X')
+                                 (walk-toplevel X' (ensure-native Fn) []))))
