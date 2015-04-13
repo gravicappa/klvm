@@ -288,8 +288,7 @@
   Fn -> Fn)
 
 (define translate
-  Fn X Elim-toplevel-atoms? -> (let X' (regkl.translate
-                                        (map (function denest.translate) X)
-                                        Elim-toplevel-atoms?)
-                                    \\. (output "(regkl => ~S)~%" X')
-                                 (walk-toplevel X' (ensure-native Fn) []))))
+  Denest-fn Fn X Elim-toplevel-atoms? ->
+  (let X' (regkl.translate (map (denest.translate Denest-fn) X)
+                           Elim-toplevel-atoms?)
+    (walk-toplevel X' (ensure-native Fn) []))))

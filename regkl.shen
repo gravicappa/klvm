@@ -133,6 +133,18 @@
        (@p (mk-set-reg-unexpr I Expr) Env'))
   _ V Env _ Used Unext C false -> (@p (walk-expr V Env Used Unext C) Env))
 
+(define walk-let-expr
+  X V Env Used-in-body Used Unext C true
+  -> (let Used' (remove X Used-in-body)
+          Unext' (append Used' Unext)
+          Unused (difference (map (function head) Env) Unext')
+          I (new-var-idx-or-reuse X Env Unused)
+          _ (context-nregs-> C (max (+ I 1) (context-nregs C)))
+          Env' (add-var X I Env)
+          Expr (walk-expr V Env Used Unext' C)
+       (@p (mk-set-reg-unexpr I Expr) Env'))
+  _ V Env _ Used Unext C false -> (@p (walk-expr V Env Used Unext C) Env))
+
 (define walk-let
   X V Body Env Used Unext C
   -> (let U (used-vars Body [X | Env])

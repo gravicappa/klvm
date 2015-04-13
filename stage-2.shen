@@ -1,6 +1,4 @@
-(package klvm.s2 [denest.translate
-                  
-                  regkl.trap-error klvm.s2-from-kl
+(package klvm.s2 [regkl.trap-error klvm.s2-from-kl
                   
                   klvm.call klvm.closure klvm.closure-> klvm.entry klvm.func
                   klvm.func-obj klvm.goto klvm.goto-next klvm.if
@@ -225,7 +223,7 @@
                    R]]]]]))
 
 (define klvm.s2-from-kl
-  Fn Kl Elim-toplevel-atoms? -> (translate (klvm.s1.translate
-                                            Fn Kl Elim-toplevel-atoms?)))
+  Denest-fn Fn Kl Elim-toplevel-atoms? ->
+  (translate (klvm.s1.translate Denest-fn Fn Kl Elim-toplevel-atoms?)))
 
 )

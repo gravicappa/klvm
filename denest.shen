@@ -6,33 +6,33 @@
   X [_ | Env] -> (varname X Env))
 
 (define walk-let
-  X V Body Let Env -> (let Var (gensym (protect Shenkl))
-                           A (walk-expr V Let Env)
-                           Env' [[X | Var] | Env]
-                           Let' [[Var | (fst A)] | (snd A)]
-                        (walk-expr Body Let' Env')))
+  X V Body Let Env Fn -> (let Var (gensym (protect Shenkl))
+                              A (walk-expr V Let Env Fn)
+                              Env' [[X | Var] | Env]
+                              Let' [[Var | (fst A)] | (snd A)]
+                           (walk-expr Body Let' Env' Fn)))
 
 (define walk-if
-  If Then Else Let Env -> (let Var (gensym (protect Shenkl))
-                               A (walk-expr If Let Env)
-                               Let' [[Var | (fst A)] | (snd A)]
-                               Then' (walk-aux Then Env)
-                               Else' (walk-aux Else Env)
-                            (@p [if Var Then' Else'] Let')))
+  If Then Else Let Env Fn -> (let Var (gensym (protect Shenkl))
+                                  A (walk-expr If Let Env Fn)
+                                  Let' [[Var | (fst A)] | (snd A)]
+                                  Then' (walk-aux Then Env Fn)
+                                  Else' (walk-aux Else Env Fn)
+                               (@p [if Var Then' Else'] Let')))
 
 (define walk-cond-aux
   [] -> [error "error: cond failure"]
   [[If Then] | Cond] -> [if If Then (walk-cond-aux Cond)])
 
 (define walk-cond
-  Cond Let Env -> (walk-expr (walk-cond-aux Cond) Let Env))
+  Cond Let Env Fn -> (walk-expr (walk-cond-aux Cond) Let Env Fn))
 
 (define walk-lambda
-  X Body Let Env -> (let Env' [[X | X] | Env]
-                      (@p [lambda X (walk-aux Body Env')] Let)))
+  X Body Let Env Fn -> (let Env' [[X | X] | Env]
+                         (@p [lambda X (walk-aux Body Env' Fn)] Let)))
 
 (define walk-freeze
-  X Let Env -> (@p [freeze (walk-aux X Env)] Let))
+  X Let Env Fn -> (@p [freeze (walk-aux X Env Fn)] Let))
 
 (define and-fn
   X Y -> [if X Y false])
@@ -41,49 +41,54 @@
   X Y -> [if X true Y])
 
 (define walk-do-aux
-  [] Env Acc -> (reverse Acc)
-  [X | Body] Env Acc -> (let Y (walk-aux X Env)
-                          (walk-do-aux Body Env [Y | Acc])))
+  [] Env _ Acc -> (reverse Acc)
+  [X | Body] Env Fn Acc -> (let Y (walk-aux X Env Fn)
+                             (walk-do-aux Body Env Fn [Y | Acc])))
 
 (define walk-do
-  X Let Env -> (@p [do | (walk-do-aux X Env [])] Let))
+  X Let Env Fn -> (@p [do | (walk-do-aux X Env Fn [])] Let))
 
 (define walk-trap
-  X E Let Env -> (@p [trap-error (walk-aux X Env) (walk-aux E Env)] Let))
+  X E Let Env Fn -> (@p [trap-error (walk-aux X Env Fn) (walk-aux E Env Fn)]
+                        Let))
 
 (define walk-expr
-  [and X Y] Let Env -> (walk-expr (and-fn X Y) Let Env)
-  [or X Y] Let Env -> (walk-expr (or-fn X Y) Let Env)
-  [if If Then Else] Let Env -> (walk-if If Then Else Let Env)
-  [let X V Body] Let Env -> (walk-let X V Body Let Env)
-  [freeze X] Let Env -> (walk-freeze X Let Env)
-  [lambda X Body] Let Env -> (walk-lambda X Body Let Env)
-  [cond | Cond] Let Env -> (walk-cond Cond Let Env)
-  [defun F Args Body] Let _ -> (@p [defun F Args (walk Body)] Let)
-  [trap-error X E] Let Env -> (walk-trap X E Let Env)
-  [do | Body] Let Env -> (walk-do Body Let Env)
-  [X | Y] Let Env -> (walk-app [X | Y] Let Env [])
-  X Let Env -> (@p (varname X Env) Let))
+  [and X Y] Let Env Fn -> (walk-expr (and-fn X Y) Let Env Fn)
+  [or X Y] Let Env Fn -> (walk-expr (or-fn X Y) Let Env Fn)
+  [if If Then Else] Let Env Fn -> (walk-if If Then Else Let Env Fn)
+  [let X V Body] Let Env Fn -> (walk-let X V Body Let Env Fn)
+  [freeze X] Let Env Fn -> (walk-freeze X Let Env Fn)
+  [lambda X Body] Let Env Fn -> (walk-lambda X Body Let Env Fn)
+  [cond | Cond] Let Env Fn -> (walk-cond Cond Let Env Fn)
+  [defun F Args Body] Let _ Fn -> (@p [defun F Args (translate Fn Body)] Let)
+  [trap-error X E] Let Env Fn -> (walk-trap X E Let Env Fn)
+  [do | Body] Let Env Fn -> (walk-do Body Let Env Fn)
+  [X | Y] Let Env Fn -> (walk-app [X | Y] Let Env Fn [])
+  X Let Env _ -> (@p (varname X Env) Let))
 
 (define walk-app
-  [] Let _ Acc -> (@p (reverse Acc) Let)
-  [[X | Y] | R] Let Env Acc -> (let Var (gensym (protect Shenkl))
-                                    A (walk-expr [X | Y] Let Env)
-                                    Let' [[Var | (fst A)] | (snd A)]
-                                 (walk-app R Let' Env [Var | Acc]))
-                               where (not (element? X [type]))
-  [F | R] Let Env Acc -> (walk-app R Let Env [(varname F Env) | Acc]))
+  [] Let _ Fn Acc -> (@p (reverse Acc) Let)
+  [[X | Y] | R] Let Env Fn Acc -> (let A (walk-expr [X | Y] Let Env Fn)
+                                   (walk-app R (snd A) Env Fn [(fst A) | Acc]))
+                                   where (Fn [X | Y])
+  [[X | Y] | R] Let Env Fn Acc -> (let Var (gensym (protect Shenkl))
+                                       A (walk-expr [X | Y] Let Env Fn)
+                                       Let' [[Var | (fst A)] | (snd A)]
+                                    (walk-app R Let' Env Fn [Var | Acc]))
+                                  where (not (element? X [type]))
+  [F | R] Let Env Fn Acc -> (walk-app R Let Env Fn [(varname F Env) | Acc]))
 
 (define mk-let-cascade
   [] Code -> Code
   [[Var | Expr] | Vars] Code -> [let Var Expr (mk-let-cascade Vars Code)])
 
 (define walk-aux
-  Code Env -> (let X (walk-expr Code [] Env)
-                (mk-let-cascade (reverse (snd X)) (fst X))))
+  Code Env Fn -> (let X (walk-expr Code [] Env Fn)
+                   (mk-let-cascade (reverse (snd X)) (fst X))))
 
-(define walk
-  Code -> (walk-aux Code []))
+(define ensure-function
+  F -> (/. _ false) where (= F _)
+  F -> F)
 
 (define translate
-  Code -> (walk-aux Code [])))
+  Fn Code -> (walk-aux Code [] (ensure-function Fn))))
