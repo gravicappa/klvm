@@ -1,12 +1,12 @@
 (define klvm.s1.t1
   -> (let Kl (head (value klvm-test.*code1*))
-          Klvm1 (klvm.s1.walk [] [Kl])
+          Klvm1 (klvm.s1.translate [] [Kl] true)
           . (output "~%*KLVM1:~%~S~%~%" Klvm1)
        true))
 
 (define klvm.s1.t2
   -> (let Kl (value klvm-test.*code1*)
-          Klvm1 (klvm.s1.walk [] Kl)
+          Klvm1 (klvm.s1.translate [] Kl true)
           . (backend-utils.with-file-output
              "klvm/test/code.klvm1"
              (/. F (pr (backend-utils.str-from-sexpr "~R~%" Klvm1) F)))
@@ -15,7 +15,7 @@
 (define klvm.s1.freeze
   -> (let Kl [(klvm-test.find-func klvm-test.test-freeze)]
           . (output "~%*KL:~%~S~%~%" Kl)
-          Klvm1 (klvm.s1.walk [] Kl)
+          Klvm1 (klvm.s1.translate [] Kl true)
           . (output "~%*KLVM1:~%~S~%~%" Klvm1)
        true))
 
@@ -23,7 +23,7 @@
   X -> (regkl.walk (map (function denest.walk) X) false))
 
 (define klvm.s1-from-kl
-  Kl -> (let Klvm1 (klvm.s1.walk [] Kl)
+  Kl -> (let Klvm1 (klvm.s1.translate [] Kl true)
           Klvm1))
 
 \*

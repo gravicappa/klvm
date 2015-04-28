@@ -180,6 +180,7 @@
 
 (define (vm-init-native vm)
   (vm-add-primitive! vm 'klvm.mk-closure (vm-closure-primitive vm))
+  (vm-add-native! vm 'function 1 (lambda (sym) (vm-fn-ref vm sym)))
   (vm-add-native! vm 'list7 7 list)
   (vm-add-native! vm 'list4 4 list)
   (vm-add-native! vm '= 2 equal?)

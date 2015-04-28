@@ -4,6 +4,7 @@
                   [depends: "defstruct" "binary"]
                   [load: "regkl.shen" "denest.shen"
                          "stage-1.shen" "stage-2.shen"
+                         "util.shen"
                          \\"bytecode-macro.shen"
                          \\"bytecode.shen"
                          \\"bytecode-asm.shen"

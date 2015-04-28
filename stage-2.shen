@@ -10,8 +10,6 @@
                   klvm.tailcall klvm.tailif klvm.thaw klvm.toplevel klvm.wipe
                   klvm.lambda
 
-                  klvm.native
-
                   klvm.entry-template klvm.return-template
 
                   klvm.s1.func klvm.s1.closure klvm.s1.toplevel klvm.s1.return
@@ -173,9 +171,8 @@
                              [(return-op X C) | Acc'])
   [klvm.push-error-handler E] C Acc -> [[klvm.push-error-handler E] | Acc]
   [klvm.pop-error-handler] C Acc -> [[klvm.pop-error-handler] | Acc]
-  [klvm.native X] _ Acc -> [[klvm.native X] | Acc]
-  [] _ Acc -> Acc
-  X _ _ -> (error "klvm.s2.walk-x1: Unexpected L1 expression: ~S~%" X))
+  [X | Xs] _ Acc -> [[X | Xs] | Acc]
+  _ _ Acc -> Acc)
 
 (define func-hdr
   klvm.s1.func -> klvm.func
@@ -223,7 +220,6 @@
                    R]]]]]))
 
 (define klvm.s2-from-kl
-  Denest-fn Fn Kl Elim-toplevel-atoms? ->
-  (translate (klvm.s1.translate Denest-fn Fn Kl Elim-toplevel-atoms?)))
-
+  Fn Kl Elim-toplevel-atoms? ->
+  (translate (klvm.s1.translate Fn Kl Elim-toplevel-atoms?)))
 )

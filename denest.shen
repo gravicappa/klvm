@@ -1,4 +1,4 @@
-(package denest []
+(package denest [walk]
 
 (define varname
   X [] -> X
@@ -70,7 +70,7 @@
   [] Let _ Fn Acc -> (@p (reverse Acc) Let)
   [[X | Y] | R] Let Env Fn Acc -> (let A (walk-expr [X | Y] Let Env Fn)
                                    (walk-app R (snd A) Env Fn [(fst A) | Acc]))
-                                   where (Fn [X | Y])
+                                   where (not (= (Fn [X | Y]) walk))
   [[X | Y] | R] Let Env Fn Acc -> (let Var (gensym (protect Shenkl))
                                        A (walk-expr [X | Y] Let Env Fn)
                                        Let' [[Var | (fst A)] | (snd A)]
@@ -87,7 +87,7 @@
                    (mk-let-cascade (reverse (snd X)) (fst X))))
 
 (define ensure-function
-  F -> (/. _ false) where (= F _)
+  F -> (/. _ walk) where (element? F [_ [] false])
   F -> F)
 
 (define translate
