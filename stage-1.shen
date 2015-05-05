@@ -57,65 +57,163 @@
        X (set-call-args R 0 [])
     [[klvm.call F Nargs Return-reg (reverse X)] | Acc]))
 
-(define place-free-args
-  [] _ _ Args Acc -> (@p Acc (reverse Args))
-  [[] | Xs] I Map Args Acc -> (place-free-args Xs (+ I 1) Map [[] | Args] Acc)
-  [X | Xs] I Map Args Acc -> (place-free-args Xs (+ I 1) Map [X | Args] Acc)
-                             where (element? I Map)
-  [X | Xs] I Map Args Acc -> (let Acc [[I | X] | Acc]
-                                  Args [[] | Args]
-                               (place-free-args Xs (+ I 1) Map Args Acc)))
+(package tail [klvm.reg]
+  (defstruct arg
+    (i number)
+    (value unit)
+    (deps (list number)))
 
-(define mk-place
-  [] M -> (+ M 1)
-  [[_ | I] | Xs] M -> (mk-place Xs M) where (> M I)
-  [[_ | I] | Xs] M -> (mk-place Xs I))
+  (define tree-find-all'
+    [] _ Acc -> Acc
+    X F Acc -> [X | Acc] where (F X)
+    [X | Y] F Acc -> (tree-find-all' Y F [X | Acc]) where (F X)
+    [[X | Xs] | Y] F Acc -> (tree-find-all' Y F (tree-find' [X | Xs] F Acc))
+    [X | Y] F Acc -> (tree-find-all' Y F Acc)
+    _ _ Acc -> Acc)
 
-(define place-args'
-  [] _ Map Acc -> (@p Acc Map)
-  [[] | Xs] I Map Acc -> (place-args' Xs (+ I 1) Map Acc)
-  [X | Xs] I Map Acc -> (place-args' Xs (+ I 1) Map [[I | X] | Acc])
-                        where (not (element? I Xs))
-  [X | Xs] I Map Acc -> (let Place (mk-place Map 0)
-                             Acc [[Place | X] | Acc]
-                             Map [[I | Place] | Map]
-                          (place-args' Xs (+ I 1) Map Acc)))
+  (define tree-find-all
+    F Tree -> (reverse (tree-find-all' Tree F [])))
 
-(define place-extra
-  [] Acc -> (reverse Acc)
-  [[[] | _]] Acc -> (reverse Acc)
-  [[D | S] | Ps] Acc -> (place-extra Ps [[D | S] | Acc]))
+  (define reg?
+    [klvm.reg _] -> true
+    X -> false)
 
-(define nplaces
-  [] N -> N
-  [[I | _] | Ps] N -> (nplaces Ps N) where (> N I)
-  [[I | _] | Ps] N -> (nplaces Ps I))
+  (define reg-num
+    [klvm.reg X] -> X)
 
-(define place-args
-  Nregs Args -> (let X (place-free-args Args 0 Args [] [])
-                     X (place-args' (snd X) 0 [[[] | Nregs]] (fst X))
-                     X (place-extra (snd X) (fst X))
-                  (@p X (nplaces X 0))))
+  (define <-vec
+    V I -> (<-vector V (+ I 1)))
 
-(define set-tailcall-args'
-  [] Acc -> Acc
-  [[D | D] | Ps] Acc -> (set-tailcall-args' Ps Acc)
-  [[D | [X]] | Ps] Acc -> (set-tailcall-args' Ps [[D | X] | Acc])
-  [[D | S] | Ps] Acc -> (set-tailcall-args' Ps [[D | [klvm.reg S]] | Acc]))
+  (define vec->
+    V I X -> (vector-> V (+ I 1) X))
 
-(define set-tailcall-args
-  Nregs Args Acc -> (let P (place-args Nregs Args)
-                         . (upd-context-frame-size-extra (+ (snd P) 1))
-                         Acc (set-tailcall-args' (fst P) Acc)
-                      (@p Acc (snd P))))
+  (define find-arg-min-ref
+    [] _ Mx _ -> Mx
+    [X | Xs] Ref Mx Mr -> (let F (find-arg-min-ref Xs Ref)
+                               R (<-vec Ref (arg-i X))
+                            (if (or (< Mr 0) (< R Mr))
+                                (F X R)
+                                (F Mx Mr))))
+
+  (define dec-ref-count
+    I Ref -> (let X (<-vec Ref I)
+               (if (> X 0)
+                   (vec-> Ref I (- X 1))
+                   Ref)))
+
+  (define find-tmp-place
+    I Ref -> I where (= (<-vec Ref I) 0)
+    I Ref -> (find-tmp-place (+ I 1) Ref))
+
+  (define remove-arg
+    [] _ Acc -> Acc
+    [X | Xs] A Acc -> (remove-arg Xs A Acc) where (= (arg-i X) (arg-i A))
+    [X | Xs] A Acc -> (remove-arg Xs A [X | Acc]))
+
+  (define remap-and-deref
+    [klvm.reg R] Self Ref Map -> (let R' (<-vec Map R)
+                                      . (if (= R Self)
+                                            _
+                                            (dec-ref-count R' Ref))
+                                   [klvm.reg R'])
+    [X | Xs] Self Ref Map -> (let F (/. X (remap-and-deref X Self Ref Map))
+                               (map F [X | Xs]))
+    X _ _ _ -> X)
+
+  (define mov-arg'
+    I X Acc -> [[I | X] | Acc])
+
+  (define mov-arg
+    I X Ref Map Acc -> (mov-arg' I (remap-and-deref X I Ref Map) Acc))
+
+  (define put-arg-1
+    Args N Ref X Map Acc -> (let A (mov-arg (arg-i X) (arg-value X) Ref Map Acc)
+                              (put-iter Args N Ref Map A)))
+
+  (define put-arg-N
+    Args N Ref X Map Acc -> (let 
+                                 T (find-tmp-place N Ref)
+                                 . (output "X: ~S~%" X)
+                                 . (output "tmp: ~S~%" T)
+                                 . (output "ref 1: ~S~%" Ref)
+                                 A (mov-arg' T [klvm.reg (arg-i X)] Acc)
+                                 . (output "ref 2: ~S~%" Ref)
+                                 A (mov-arg (arg-i X) (arg-value X) Ref Map A)
+                                 . (output "Acc: ~S~%" A)
+                                 . (output "ref 3: ~S~%" Ref)
+                                 . (vec-> Ref T (<-vec Ref (arg-i X)))
+                                 . (vec-> Ref (arg-i X) 0)
+                                 . (vec-> Map (arg-i X) T)
+                              (put-iter Args N Ref Map A)))
+
+  (define put-iter
+    [] _ _ _ Acc -> (reverse Acc)
+    Args N Ref Map Acc -> (let . (output "~%## put-iter~%")
+                               A (find-arg-min-ref Args Ref [] -1)
+                               . (output "min ref: ~S~%" A)
+                               Args (remove-arg Args A [])
+                               . (output "args': ~S~%" Args)
+                               R (<-vec Ref (arg-i A))
+                               . (output "R: ~S~%" R)
+                            (if (= R 0)
+                                (put-arg-1 Args N Ref A Map Acc)
+                                (put-arg-N Args N Ref A Map Acc))))
+
+  (define init-tail-args
+    [] _ Acc -> (reverse Acc)
+    [X | Args] I Acc -> (let Deps (tree-find-all (function reg?) X)
+                             A (mk-arg I X (map (function reg-num) Deps))
+                          (init-tail-args Args (+ I 1) [A | Acc])))
+
+  (define init-map
+    N N V -> V
+    I N V -> (do (vector-> V I (- I 1))
+                 (init-map (+ I 1) N V)))
+
+  (define init-arg-ref
+    [] I V -> V
+    [R | Rs] R V -> (init-arg-ref Rs R V)
+    [R | Rs] I V -> (do (vec-> V R (+ (<-vec V R) 1))
+                        (init-arg-ref Rs I V)))
+
+  (define init-ref-vec
+    N N V -> V
+    I N V -> (do (vector-> V I 0)
+                 (init-ref-vec (+ I 1) N V)))
+
+  (define init-ref
+    [] V -> V
+    [A | As] V -> (do (init-arg-ref (arg-deps A) (arg-i A) V)
+                      (init-ref As V)))
+
+  (define vec-size'
+    [] S -> S
+    [D | Ds] S -> (vec-size' Ds (if (> D S) D S)))
+
+  (define vec-size
+    [] S -> S
+    [A | As] S -> (vec-size As (vec-size' (arg-deps A) S)))
+
+  (define put-args
+    Args -> (let N (length Args)
+                 A (init-tail-args Args 0 [])
+                 Vsize (+ (vec-size A N) 1 N)
+                 Ref (init-ref A (init-ref-vec 1 (+ Vsize 1) (vector Vsize)))
+                 Map (init-map 1 (+ Vsize 1) (vector Vsize))
+              (put-iter A N Ref Map [])))
+
+  (define max-arg-num
+    [] M -> M
+    [[Reg | X] | Code] M -> (max-arg-num Code Reg) where (< M Reg)
+    [[Reg | X] | Code] M -> (max-arg-num Code M)
+    X _ -> (error "~A: unrecognized data ~S~%" max-arg X)))
 
 (define walk-tailcall
   F Args C Acc ->
-  (let R (regs-from-args Args C [])
-       Nargs (length R)
-       . (upd-context-frame-size-extra Nargs C)
-       X (set-tailcall-args (context-frame-size C) R [])
-    [[klvm.tailcall F Nargs (reverse (fst X))] | Acc]))
+  (let Nargs (length Args)
+       Code (tail.put-args (reverse Args))
+       . (upd-context-frame-size-extra (+ (tail.max-arg-num Code Nargs) 1) C)
+    [[klvm.tailcall F Nargs Code] | Acc]))
 
 (define closure-args
   S N N Acc -> (reverse Acc)
