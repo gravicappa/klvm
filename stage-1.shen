@@ -35,27 +35,15 @@
          where (> N (context-frame-size-extra C))
   _ C -> C)
 
-(define reg-from-arg
-  [klvm.reg R | _] C -> R
-  X _ -> [X])
-
-(define regs-from-args
-  [] C Acc -> Acc
-  [X | Xs] C Acc -> (regs-from-args Xs C [(reg-from-arg X C) | Acc]))
-
 (define set-call-args 
   [] _ Acc -> Acc
-  [[A] | As] I Acc -> (set-call-args As (+ I 1) [[I | A] | Acc])
-  [A | As] I Acc -> (set-call-args As (+ I 1) [[I | [klvm.reg A]] | Acc])
-  [X | As] _ _ -> (error "Unexpected arg expr: ~S~%" X))
+  [A | As] I Acc -> (set-call-args As (- I 1) [[I | A] | Acc]))
 
 (define walk-call
-  F Args Return-reg C Acc ->
-  (let R (regs-from-args Args C [])
-       Nargs (length R)
-       . (upd-context-frame-size-extra Nargs C)
-       X (set-call-args R 0 [])
-    [[klvm.call F Nargs Return-reg (reverse X)] | Acc]))
+  F Args Return-reg C Acc -> (let Nargs (length Args)
+                                  . (upd-context-frame-size-extra Nargs C)
+                                  Args' (set-call-args Args (- Nargs 1) [])
+                               [[klvm.call F Nargs Return-reg Args'] | Acc]))
 
 (package tail [klvm.reg]
   (defstruct arg
@@ -133,14 +121,14 @@
   (define put-arg-N
     Args N Ref X Map Acc -> (let 
                                  T (find-tmp-place N Ref)
-                                 . (output "X: ~S~%" X)
-                                 . (output "tmp: ~S~%" T)
-                                 . (output "ref 1: ~S~%" Ref)
+                                 \\. (output "X: ~S~%" X)
+                                 \\. (output "tmp: ~S~%" T)
+                                 \\. (output "ref 1: ~S~%" Ref)
                                  A (mov-arg' T [klvm.reg (arg-i X)] Acc)
-                                 . (output "ref 2: ~S~%" Ref)
+                                 \\. (output "ref 2: ~S~%" Ref)
                                  A (mov-arg (arg-i X) (arg-value X) Ref Map A)
-                                 . (output "Acc: ~S~%" A)
-                                 . (output "ref 3: ~S~%" Ref)
+                                 \\. (output "Acc: ~S~%" A)
+                                 \\. (output "ref 3: ~S~%" Ref)
                                  . (vec-> Ref T (<-vec Ref (arg-i X)))
                                  . (vec-> Ref (arg-i X) 0)
                                  . (vec-> Map (arg-i X) T)
@@ -148,13 +136,13 @@
 
   (define put-iter
     [] _ _ _ Acc -> (reverse Acc)
-    Args N Ref Map Acc -> (let . (output "~%## put-iter~%")
-                               A (find-arg-min-ref Args Ref [] -1)
-                               . (output "min ref: ~S~%" A)
+    Args N Ref Map Acc -> (let A (find-arg-min-ref Args Ref [] -1)
+                               \\. (output "~%## put-iter~%")
+                               \\. (output "min ref: ~S~%" A)
                                Args (remove-arg Args A [])
-                               . (output "args': ~S~%" Args)
+                               \\. (output "args': ~S~%" Args)
                                R (<-vec Ref (arg-i A))
-                               . (output "R: ~S~%" R)
+                               \\. (output "R: ~S~%" R)
                             (if (= R 0)
                                 (put-arg-1 Args N Ref A Map Acc)
                                 (put-arg-N Args N Ref A Map Acc))))
