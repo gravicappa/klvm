@@ -55,9 +55,22 @@
     [] _ Acc -> Acc
     X F Acc -> [X | Acc] where (F X)
     [X | Y] F Acc -> (tree-find-all' Y F [X | Acc]) where (F X)
-    [[X | Xs] | Y] F Acc -> (tree-find-all' Y F (tree-find' [X | Xs] F Acc))
+    [[X | Xs] | Y] F Acc -> (let Acc (tree-find-all' [X | Xs] F Acc)
+                              (tree-find-all' Y F Acc))
     [X | Y] F Acc -> (tree-find-all' Y F Acc)
     _ _ Acc -> Acc)
+
+  (define tree-find-all''
+    [] _ Acc -> Acc
+    [X | Y] F Acc -> (tree-find-all'' Y F [X | Acc]) where (F X)
+    [[X | Xs] | Y] F Acc -> (let Acc (tree-find-all' [X | Xs] F Acc)
+                              (tree-find-all'' Y F Acc))
+    [X | Y] F Acc -> (tree-find-all'' Y F Acc)
+    _ _ Acc -> Acc)
+
+  (define tree-find-all'
+    X F Acc -> [X | Acc] where (F X)
+    X F Acc -> (tree-find-all'' X F Acc))
 
   (define tree-find-all
     F Tree -> (reverse (tree-find-all' Tree F [])))
@@ -147,11 +160,11 @@
                                 (put-arg-1 Args N Ref A Map Acc)
                                 (put-arg-N Args N Ref A Map Acc))))
 
-  (define init-tail-args
+  (define init-args
     [] _ Acc -> (reverse Acc)
     [X | Args] I Acc -> (let Deps (tree-find-all (function reg?) X)
                              A (mk-arg I X (map (function reg-num) Deps))
-                          (init-tail-args Args (+ I 1) [A | Acc])))
+                          (init-args Args (+ I 1) [A | Acc])))
 
   (define init-map
     N N V -> V
@@ -184,7 +197,7 @@
 
   (define put-args
     Args -> (let N (length Args)
-                 A (init-tail-args Args 0 [])
+                 A (init-args Args 0 [])
                  Vsize (+ (vec-size A N) 1 N)
                  Ref (init-ref A (init-ref-vec 1 (+ Vsize 1) (vector Vsize)))
                  Map (init-map 1 (+ Vsize 1) (vector Vsize))
