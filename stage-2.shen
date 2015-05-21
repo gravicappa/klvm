@@ -25,8 +25,6 @@
   (func s-expr)
   (toplevel s-expr))
 
-(set inline-func-entry false)
-(set inline-func-return false)
 (define next-reg C -> (- (context-frame-size C) 1))
 (define nargs-reg C -> (- (context-frame-size C) 2))
 
@@ -95,14 +93,9 @@
   _ _ -> [])
 
 (define entry-op
-  Name Arity Type -> (klvm.entry-template
-                      Name Arity (entry-func-name Name Type))
-                     where (value inline-func-entry)
   Name Arity Type -> [klvm.entry Name Arity (entry-func-name Name Type)])
 
 (define return-op
-  X C -> (klvm.return-template X (next-reg C))
-         where (value inline-func-return)
   X C -> [klvm.return X (next-reg C)])
 
 (define call-ret
