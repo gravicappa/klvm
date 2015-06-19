@@ -234,7 +234,7 @@
 
 (define call-aux
   F [] A B -> (F A B)
-  F [X | Y] A B -> (call-aux [F X] Y A B))
+  F [X | Y] A B -> (call-aux (F X) Y A B))
 
 (define test-closure-3
   -> (call-aux (function list-7) [1 2 3 4 5] a b))

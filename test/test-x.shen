@@ -3,7 +3,8 @@
                       
                       klvm.s1.translate
                       klvm.s2.translate
-                      klvm.func klvm.closure klvm.toplevel]
+                      klvm.func klvm.closure klvm.toplevel
+                      walk]
   (define write
     (@p Code Test) Prefix -> 
     (let Defs (cn Prefix ".test")
@@ -25,7 +26,7 @@
   (define s2-prim _ -> walk)
 
   (define s2
-    Code -> (let S1 (klvm.s1.translate (function s2-prim) Code true)
+    Code -> (let S1 (klvm.s1.translate [] Code true)
                  S2 (klvm.s2.translate S1)
                (str-s2 S2)))
 
@@ -94,6 +95,3 @@
 
   (define str-s2
     X -> (str-s2' X "")))
-
-\\(klvm.test.x.write (klvm.test.data) "klvm/test/code")
-(klvm.test.x.write (klvm.test.data) "test_code")

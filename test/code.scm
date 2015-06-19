@@ -1,3 +1,6 @@
+(define current-test #f)
+(define test-defs (make-table))
+
 (define (cut-comment s comment-char)
   (let ((n (string-length s)))
     (let loop ((i 0))
@@ -47,3 +50,20 @@
 
 (define (read-asm-src-file file)
   (call-with-input-file file parse-asm-src))
+
+(define (test-arg args)
+  (if (pair? args)
+      (car args)
+      current-test))
+
+(define (read-test-defs . ?name)
+  (let* ((name (test-arg ?name))
+         (defs (with-input-from-file (string-append name ".test") read)))
+    (table-set! test-defs name defs)
+    defs))
+
+(define (read-test-klvm2 vm . ?name)
+  (read-klvm-from-file (string-append (test-arg ?name) ".klvm2") vm))
+
+(define (read-test-asm . ?name)
+  (read-klvm-from-file (string-append (test-arg ?name) ".klvma") vm))

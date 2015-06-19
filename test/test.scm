@@ -68,8 +68,9 @@
            (display (mkstr "# DONE " total " tests"))
            (newline)
            (cond ((pair? errs)
-                  (display (mkstr "         " (length errs) " errors:"))
-                  (for-each (lambda (e) (display (mkstr " " e))) errs)))
+                  (display (mkstr (length errs) " errors:"))
+                  (for-each (lambda (e) (display (mkstr " " e)))
+                            (reverse errs))))
            (newline)))))
 
 (define (show-test-results results total)
