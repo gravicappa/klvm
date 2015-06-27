@@ -1,4 +1,12 @@
 (package klvm [-type walk subst]
+
+(define kl-from-shen
+  X -> (let X (shen.walk (function macroexpand) X)
+            X (if (shen.packaged? X)
+                  (package-contents X)
+                  X)
+         (shen.elim-def (shen.proc-input+ X))))
+
 (define mktype
   Name Code -> [define (concat Name -type) | Code])
 
