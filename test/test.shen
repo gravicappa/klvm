@@ -1,4 +1,4 @@
-(package klvm.test [deftest]
+(package klvm.test [deftest klvm.kl-from-shen]
   (set files ["test-code.shen"])
 
   (define from
@@ -17,7 +17,7 @@
   (load-files (value files) [])
 
   (define split-cases
-    [] Cases Code -> (@p (kl-from-shen (reverse Code)) (reverse Cases))
+    [] Cases Code -> (@p (klvm.kl-from-shen (reverse Code)) (reverse Cases))
 
     [[deftest Test Ret] | Xs] Cases Code ->
     (let T' (map (function parse-arg) Test)
@@ -63,11 +63,4 @@
                      (/. E (do (set *maximum-print-sequence-size* M)
                                (error (error-to-string E)))))
                   . (set *maximum-print-sequence-size* M)
-               S))
-               
- (define kl-from-shen
-   X -> (let X (shen.walk (function macroexpand) X)
-             X (if (shen.packaged? X)
-                   (package-contents X)
-                   X)
-          (shen.elim-def (shen.proc-input+ X)))))
+               S)))

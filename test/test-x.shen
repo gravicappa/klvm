@@ -3,8 +3,10 @@
                       
                       klvm.s1.translate
                       klvm.s2.translate
-                      klvm.func klvm.closure klvm.toplevel
-                      walk]
+                      klvm.bytecode.asm.from-kl 
+                      klvm.bytecode.asm.print
+                      klvm.func klvm.closure klvm.toplevel]
+
   (define write
     (@p Code Test) Prefix -> 
     (let Defs (cn Prefix ".test")
@@ -15,22 +17,31 @@
          . (write-to-file Defs (defs Test []))
          . (write-to-file S1 (s1 Code))
          . (write-to-file S2 (s2 Code))
-         . (write-to-file Sa ";; asmc#10;")
+         . (write-asm Code Sa)
          . (write-to-file Sb ";; bytecodec#10;")
       [Defs S1 S2 Sa Sb]))
+
+  (define call-with-file-output
+    File Fn -> (let F (open File out)
+                 (trap-error (do (Fn F)
+                                 (close F))
+                             (/. E (do (close F)
+                                       (error (error-to-string E)))))))
 
   (define s1
     Code -> (let S1 (klvm.s1.translate [] Code true)
               (klvm.test.str-from-sexpr "~R~%" S1)))
-
-  (define s2-prim _ -> walk)
 
   (define s2
     Code -> (let S1 (klvm.s1.translate [] Code true)
                  S2 (klvm.s2.translate S1)
                (str-s2 S2)))
 
-  (define asm Code -> "")
+  (define write-asm
+    Code File -> (let B (klvm.bytecode.asm.from-kl Code 2)
+                   (call-with-file-output
+                    File
+                    (/. F (klvm.bytecode.asm.print B F)))))
 
   (define bytecode Code -> "")
 
