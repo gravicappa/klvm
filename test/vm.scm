@@ -63,6 +63,12 @@
   vm-end-marker?
   (name))
 
+(define-record-type vm-error
+  (mk-vm-error obj str)
+  vm-error?
+  (obj vm-error-obj)
+  (str vm-error-str))
+
 (define (mkstr . args)
   (with-output-to-string '()
     (lambda () (for-each display args))))
@@ -150,7 +156,7 @@
                         (lambda (e)
                           (vm-show-step vm #f "EXCEPTION")
                           (log/pp `((,name ,@args) => ,e))
-                          e)
+                          (mk-vm-error e "native error"))
                         (lambda ()
                           (set-vm-ret! vm (apply func args))
                           (vm-wipe vm 0)

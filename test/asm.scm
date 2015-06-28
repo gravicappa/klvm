@@ -140,10 +140,14 @@
 (define (asm-run pp vm)
   (define (call-native x)
     (let ((err (with-exception-handler
-                 (lambda (e) e)
+                 (lambda (e)
+                   (log/pp `(error occured ,e))
+                   e)
                  (lambda ()
-                   (x #f #f)
-                   #f))))
+                   (let ((r (x #f #f)))
+                     (if (vm-error? r)
+                         r
+                         #f))))))
       (if err
           (asm-handle-error err vm)
           (goto-next))))
@@ -349,18 +353,22 @@
 (define (asm-expr expr)
   (apply asm-call *asm* (car expr) (cdr expr)))
 
+(define (test.asm.setup)
+  (reset-vm! *asm*)
+  (read-test-defs)
+  (read-test-asm *asm*))
+
 (define (asm.t-x x)
   (clear-log)
-  (t1.asm.setup)
+  (test.asm.setup)
   (asm-expr x))
 
-(define (asm.t-do) (asm.t-x '(klvm-test.test-do)))
-
-(define (t1.asm.setup)
-  (reset-vm! *asm*)
-  (read-asm-from-file "code.aklvm" *asm*))
-
-(define (t1.asm)
+(define (test.asm)
   (clear-log)
-  (t1.asm.setup)
-  (test asm-expr t1.defs))
+  (test.asm.setup)
+  (test asm-expr (table-ref test-defs current-test)))
+
+(define (test.asm-n n)
+  (asm.t-x (test-ref (table-ref test-defs current-test) n)))
+
+(define (asm.t-do) (asm.t-x '(klvm-test.test-do)))

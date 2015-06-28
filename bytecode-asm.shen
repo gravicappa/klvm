@@ -1,10 +1,10 @@
-(package klvm.bytecode.asm [klvm.bytecode.walk klvm.bytecode.mk-backend
-                            klvm.bytecode-asm-from-kl
-                            klvm.bytecode.asm.print
+(package klvm.bytecode.asm [klvm.bytecode.compile
+                            klvm.bytecode.mk-backend'
                             klvm.bytecode.cut-package
                             klvm.bytecode.const
                             klvm.bytecode.context-const
                             klvm.bytecode.context-frame-size
+                            klvm.dbg
 
                             klvm.lambda
                             klvm.reg
@@ -47,7 +47,7 @@
 (define code-len
   X -> (length X))
 
-(define code-append
+(define code-append!
   X Y -> (append Y X))
 
 (define load-reg
@@ -140,18 +140,26 @@
 (define prep-code
   _ X -> (reverse X))
 
-(set backend (klvm.bytecode.mk-backend [] mk-code code-len code-append
-                                       prep-code funcall tailcall load-reg
-                                       load-lambda load-const jump if-reg-expr
-                                       ret-reg ret-lambda ret-const
-                                       push-error-handler pop-error-handler
-                                       emit-func))
+(set backend (klvm.bytecode.mk-backend' mk-code
+                                        code-len
+                                        code-append!
+                                        prep-code
+                                        funcall
+                                        tailcall
+                                        load-reg
+                                        load-lambda
+                                        load-const
+                                        jump
+                                        if-reg-expr
+                                        ret-reg
+                                        ret-lambda
+                                        ret-const
+                                        push-error-handler
+                                        pop-error-handler
+                                        emit-func))
 
-(define walk
-  X S+ -> (klvm.bytecode.walk X S+ (value backend)))
-
-(define klvm.bytecode-asm-from-kl
-  X S+ -> (walk X S+))
+(define klvm.bytecode.asm.from-kl
+  X S+ -> (klvm.bytecode.compile X S+ (value backend)))
 
 (define str-join*
   [] _ _ Acc -> Acc
@@ -191,7 +199,7 @@
                            where (element? Op [klvm.load-const->
                                                klvm.load-lambda->])
 
-  Op [A] Const Stream -> (print-op* ret-lambda [A] [A] Const Stream)
+  Op [A] Const Stream -> (print-op* Op [A] [A] Const Stream)
                          where (element? Op [klvm.ret-const klvm.ret-lambda])
 
   Op [A B] Const Stream -> (print-op* Op [A B] [A] Const Stream)

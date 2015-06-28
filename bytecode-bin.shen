@@ -1,4 +1,5 @@
-(package klvm.bytecode.bin [klvm.bytecode.walk klvm.bytecode.mk-backend
+(package klvm.bytecode.bin [klvm.bytecode.walk
+                            klvm.bytecode.mk-backend'
                             klvm.bytecode.def-enum
                             klvm.bytecode-from-kl
 
@@ -229,12 +230,23 @@
 (define prep-code
   C Buf -> (binary.buf-buf Buf))
 
-(set backend (klvm.bytecode.mk-backend native mk-code code-len code-append!
-                                       prep-code funcall tailcall load-reg
-                                       load-lambda load-const jump if-reg-expr
-                                       retreg retfn retconst
-                                       push-error-handler pop-error-handler
-                                       emit-func))
+(set backend (klvm.bytecode.mk-backend' mk-code
+                                        code-len
+                                        code-append!
+                                        prep-code
+                                        funcall
+                                        tailcall
+                                        load-reg
+                                        load-lambda
+                                        load-const
+                                        jump
+                                        if-reg-expr
+                                        ret-reg
+                                        ret-lambda
+                                        ret-const
+                                        push-error-handler
+                                        pop-error-handler
+                                        emit-func))
 
 (define walk
   X S+ -> (klvm.bytecode.walk X S+ (value backend)))

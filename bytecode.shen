@@ -1,13 +1,14 @@
-(package klvm.bytecode [denest.walk regkl.trap-error klvm.s1.walk
+(package klvm.bytecode [klvm.s1.translate
 
                         klvm.bytecode.walk
+                        klvm.dbg
 
                         klvm.s1.const?
 
-                        klvm.native klvm.reg klvm.reg-> klvm.call klvm.tailcall
-                        klvm.tailif klvm.if klvm.return klvm.mk-closure
-                        klvm.push-error-handler klvm.pop-error-handler
-                        klvm.lambda]
+                        klvm.native klvm.reg klvm.reg-> klvm.call
+                        klvm.tailcall klvm.tailif klvm.if klvm.return
+                        klvm.mk-closure klvm.push-error-handler
+                        klvm.pop-error-handler klvm.lambda]
 
 (defstruct context
   (func symbol)
@@ -20,49 +21,30 @@
   (jumps table)
   (backend backend))
 
-(defstruct backend
-  (native (A --> klvm.context --> A))
-  (mk-code (--> A))
-  (code-len (A --> number))
-  (code-append! (A --> A --> A))
-  (prep-code (context --> A --> A))
-  (funcall (unit --> number --> A --> unit --> context --> B --> B))
-  (tailcall (unit --> number --> unit --> context --> B --> B))
-  (load-reg (number --> number --> context --> A --> A))
-  (load-lambda (number --> symbol --> context --> A --> A))
-  (load-const (number --> B --> context --> A --> A))
-  (jump (number --> context --> A --> A))
-  (if-reg-expr (number --> number --> context --> A --> A))
-  (ret-reg (number --> context --> A --> A))
-  (ret-lambda (B --> context --> A --> A))
-  (ret-const (B --> context --> A --> A))
-  (push-error-handler (unit --> context --> A --> A))
-  (pop-error-handler (context --> A --> A))
+(klvm.bytecode.def-backend backend
+  (native (A --> klvm.context --> A) (X C) C)
+  (mk-code (--> A) () C)
+  (code-len (A --> number) (X) C)
+  (code-append! (A --> A --> A) (X Y) C)
+  (prep-code (context --> A --> A) (X) C)
+  (funcall (unit --> number --> A --> unit --> context --> B --> B)
+           (F Nargs Ret-reg Args C Acc) C)
+  (tailcall (unit --> number --> unit --> context --> B --> B)
+            (F Nargs Args C Acc) C)
+  (load-reg (number --> number --> context --> A --> A) (To From C Acc) C)
+  (load-lambda (number --> symbol --> context --> A --> A) (To From C Acc) C)
+  (load-const (number --> B --> context --> A --> A) (To X C Acc) C)
+  (jump (number --> context --> A --> A) (Where C Acc) C)
+  (if-reg-expr (number --> number --> context --> A --> A) (Reg Else C Acc) C)
+  (ret-reg (number --> context --> A --> A) (X C Acc) C)
+  (ret-lambda (B --> context --> A --> A) (X C Acc) C)
+  (ret-const (B --> context --> A --> A) (X C Acc) C)
+  (push-error-handler (unit --> context --> A --> A) (X C Acc) C)
+  (pop-error-handler (context --> A --> A) (C Acc) C)
   (emit-func (symbol --> symbol --> (list symbol) --> number --> number
-              --> context --> A --> A)))
-
-(klvm.bytecode.def-backend-fn mk-code () C)
-(klvm.bytecode.def-backend-fn code-len (X) C)
-(klvm.bytecode.def-backend-fn code-append! (X Y) C)
-(klvm.bytecode.def-backend-fn prep-code (X) C)
-
-(klvm.bytecode.def-backend-fn funcall (F Nargs Ret-reg Args C Acc) C)
-(klvm.bytecode.def-backend-fn tailcall (F Nargs Args C Acc) C)
-(klvm.bytecode.def-backend-fn load-reg (To From C Acc) C)
-(klvm.bytecode.def-backend-fn load-lambda (To From C Acc) C)
-(klvm.bytecode.def-backend-fn load-const (To X C Acc) C)
-(klvm.bytecode.def-backend-fn jump (Where C Acc) C)
-(klvm.bytecode.def-backend-fn if-reg-expr (Reg Else C Acc) C)
-(klvm.bytecode.def-backend-fn ret-reg (X C Acc) C)
-(klvm.bytecode.def-backend-fn ret-lambda (X C Acc) C)
-(klvm.bytecode.def-backend-fn ret-const (X C Acc) C)
-(klvm.bytecode.def-backend-fn push-error-handler (X C Acc) C)
-(klvm.bytecode.def-backend-fn pop-error-handler (C Acc) C)
-
-(klvm.bytecode.def-backend-fn emit-func
-                              (Type Name Args Frame-size Frame-size-extra Code
-                               C Acc)
-                              C)
+                     --> context --> A --> A)
+             (Type Name Args Frame-size Frame-size-extra Code C Acc)
+             C))
 
 (define ensure-const*
   X Type N [] List -> (@p N [[X N | Type] | List])
@@ -162,6 +144,10 @@
   [klvm.push-error-handler E] C Acc -> (push-error-handler E C Acc)
   [klvm.pop-error-handler] C Acc -> (pop-error-handler C Acc)
   [] _ Acc -> Acc
+  X _ _ <- (do (output "klvm.bytecode.walk-x1: Unexpected L1 expression: ~S~%"
+                       X)
+               (fail))
+  _ _ Acc -> Acc
   X _ _ -> (error "klvm.bytecode.walk-x1: Unexpected L1 expression: ~S~%" X))
 
 (define walk-toplevel-expr
@@ -179,9 +165,9 @@
   [] S B Acc -> ((backend-prep-code B) _ Acc)
   [X | Xs] S B Acc -> (walk-toplevel Xs S B (walk-toplevel-expr X S B Acc)))
 
-(define walk
+(define klvm.bytecode.compile
   X S+ B -> (let Code ((backend-mk-code B))
-              (walk-toplevel (klvm.s1.walk (backend-native B) X) S+ B Code)))
-
+                 S1 (klvm.s1.translate (backend-native B) X true)
+              (walk-toplevel S1 S+ B Code)))
 )
 
