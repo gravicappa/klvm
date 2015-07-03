@@ -8,5 +8,5 @@
                          "bytecode-macro.shen"
                          "bytecode.shen"
                          "bytecode-asm.shen"
-                         \\"bytecode-bin.shen"
+                         "bytecode-bin.shen"
                          ]])

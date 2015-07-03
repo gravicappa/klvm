@@ -1,5 +1,8 @@
 (package klvm [-type walk subst]
 
+(define dbg
+  X -> (do (output "~S~%" X) (fail)))
+
 (define kl-from-shen
   X -> (let X (shen.walk (function macroexpand) X)
             X (if (shen.packaged? X)

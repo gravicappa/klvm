@@ -1,7 +1,8 @@
 (package klvm.bytecode [binary.bitwise-ior binary.bitwise-and
                         binary.arithmetic-shift | & >> << even? div
                         divisible-by?
-                        context-backend defstruct]
+                        context-backend defstruct
+                        klvm.dbg]
   (define cut-package*
     "" W -> W
     (@s "." Cs) W -> (cut-package* Cs "")
@@ -64,7 +65,7 @@
   (define backend-slot
     [Name Type | _] -> [Name Type])
 
-  (define def-backend
+  (define def-backend-fn
     Name Defs -> (let Slots (map (function backend-slot) Defs)
                       Code (backend-defs Defs Name [])
                       M (concat (intern "mk-") 
@@ -77,7 +78,8 @@
   (define set-backend-fn
     Backend Sym -> (let Name (make-string "klvm.bytecode.backend-~A->"
                                           (cut-package Sym))
-                     [[function [intern Name]] Backend [function Sym]]))
+                     [[function [intern Name]] Backend [lambda (protect X)
+                                                         [Sym (protect X)]]]))
 
   (define mk-backend-code
     Defs -> (let Mk [function [intern "klvm.bytecode.mk-backend-default"]]
@@ -86,7 +88,7 @@
                 (protect Backend)]))
                   
   (defmacro def-backend-macro
-    [def-backend Name | Defs] -> (def-backend Name Defs))
+    [klvm.bytecode.def-backend Name | Defs] -> (def-backend-fn Name Defs))
 
   (defmacro mk-backend-macro
     [klvm.bytecode.mk-backend' | Defs] -> (mk-backend-code Defs))
@@ -99,18 +101,11 @@
 
   (defmacro x.package-null
     [package Pkg Syms | X] -> [package Pkg Syms
-                                       | (unwrap-package-null X [])]))
+                                       | (unwrap-package-null X [])])
 
-(defmacro klvm.bytecode.def-enum
-  [klvm.bytecode.def-enum | Defs] -> (klvm.bytecode.def-enum-func Defs))
+  (defmacro def-enum-macro
+    [klvm.bytecode.def-enum | Defs] -> (def-enum-func Defs))
 
-(defmacro klvm.bytecode.xbin
-  [klvm.bytecode.bin.xbin X] -> (klvm.bytecode.xbin-func X)
-  [klvm.bytecode.bin.bin X] -> (klvm.bytecode.bin-func X) where (number? X))
-
-\*
-(read-from-string "(package klvm.bytecode [] (klvm.bytecode.def-backend-fn mk-code [] C))")
-
-(read-from-string "(package klvm.bytecode [] (klvm.bytecode.def-backend-fn closure-> (X Nargs C Acc) C))")
-*\
-
+  (defmacro xbin-macro
+    [klvm.bytecode.xbin X] -> (xbin-func X)
+    [klvm.bytecode.bin X] -> (bin-func X) where (number? X)))
