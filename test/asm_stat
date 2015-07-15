@@ -6,6 +6,12 @@ array set defs {
   load-reg-> {To From}
   load-lambda-> {To Fn}
   load-const-> {To Const}
+  arg-reg-> {To From}
+  arg-lambda-> {To Fn}
+  arg-const-> {To Const}
+  tail-arg-reg-> {To From}
+  tail-arg-lambda-> {To Fn}
+  tail-arg-const-> {To Const}
   jump {+Off}
   closure-lambda-> {Lambda Nargs}
   closure-reg-> {Reg Nargs}
@@ -168,7 +174,6 @@ proc parse {var fd} {
   array set ctx {
     nconst 0
     func {}
-    call_args 0
     nargs 0
   }
   array unset stat @mod/*
@@ -199,7 +204,6 @@ proc parse {var fd} {
         switch -- $op {
           closure-lambda-> - closure-reg-> - closure-fn-> -
           closure-tail-lambda-> - closure-tail-reg-> - closure-tail-fn-> {
-            set ctx(call_args) 1
             set ctx(prev_to) $ctx(frame_size)
             set ctx(prev_type) {}
             set ctx(prev_from) {}
@@ -219,7 +223,10 @@ proc parse {var fd} {
     process_funcall $op $args ctx stat
     process_constsize $op $args ctx stat
 
-    if {$ctx(call_args) && $op in {load-reg-> load-const-> load-lambda->}} {
+    set call_args_ops {arg-reg-> arg-const-> arg-lambda-> tail-arg-reg->
+                       tail-arg-const-> tail-arg-lambda->}
+
+    if {$op in $call_args_ops} {
       process_callsize $op $args ctx stat
       process_callsize2 $op $args ctx stat
       process_callsize3 $op $args ctx stat
@@ -240,51 +247,34 @@ proc parse {var fd} {
 proc process_const {op arg var statvar} {
 }
 
+proc process_call_args {op arg var statvar} {
+  upvar 1 $var ctx
+  upvar 1 $statvar stat
+  lassign $arg to from
+  incr stat(args/sum)
+  incr stat(args/n)
+  if {$ctx(prev_to) eq {}} {
+    if {$to == $ctx(frame_size)} {
+      incr stat(args/to=fs)
+    }
+    incr stat(args/to+1)
+  } else {
+    if {$to - 1 == $ctx(prev_to)} {
+      incr stat(args/to+1)
+    }
+    if {$to + 1 == $ctx(prev_to)} {
+      incr stat(args/to-1)
+    }
+  }
+}
+
 proc process_funcall {op arg var statvar} {
   upvar 1 $var ctx
   upvar 1 $statvar stat
   switch -- $op {
-    load-reg-> {
-      lassign $arg to from
-      if {$ctx(call_args)} {
-        incr stat($op/in_call)
-        incr stat(args/sum)
-        incr stat(args/n)
-        if {$ctx(prev_to) eq {}} {
-          if {$to == $ctx(frame_size)} {
-            incr stat(args/to=fs)
-          }
-          incr stat(args/to+1)
-        } else {
-          if {$to - 1 == $ctx(prev_to)} {
-            incr stat(args/to+1)
-          }
-          if {$to + 1 eq $ctx(prev_to)} {
-            incr stat(args/to-1)
-          }
-        }
-      }
-    }
-    load-const-> - load-lambda-> {
-      if {$ctx(call_args)} {
-        lassign $arg to x
-        incr stat($op/in_call)
-        incr stat(args/sum)
-        incr stat(args/n)
-        if {$ctx(prev_to) eq {}} {
-          if {$to eq $ctx(frame_size)} {
-            incr stat(args/to=fs)
-          }
-          incr stat(args/to+1)
-        } else {
-          if {$to - 1 == $ctx(prev_to)} {
-            incr stat(args/to+1)
-          }
-          if {$to + 1 == $ctx(prev_to)} {
-            incr stat(args/to-1)
-          }
-        }
-      }
+    arg-reg-> - arg-const-> - arg-lambda-> -
+    tail-arg-reg-> - tail-arg-const-> - tail-arg-lambda-> {
+      process_call_args $op $arg ctx stat
     }
     call - tail-call {
       switch -- $ctx(nargs) {

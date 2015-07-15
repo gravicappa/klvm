@@ -105,4 +105,19 @@
                      (str-s2' Y S)))
 
   (define str-s2
-    X -> (str-s2' X "")))
+    X -> (str-s2' X ""))
+
+  (define for-each
+    Fn [] -> []
+    Fn [X | Xs] -> (do (Fn X) (for-each Fn Xs)))
+    
+  (define asm-shen
+    -> (let Sdir "official/Shen 19.2/KLambda"
+            Ddir "klvm/test/shen"
+            Files ["core.kl" "declarations.kl" "load.kl" "macros.kl"
+                   "prolog.kl" "reader.kl" "sequent.kl" "sys.kl" "t-star.kl"
+                   "toplevel.kl" "track.kl" "types.kl" "writer.kl" "yacc.kl"]
+         (for-each (/. X (write-asm
+                          (read-file (make-string "~A/~A" Sdir X))
+                          (make-string "~A/~A.klvma" Ddir X)))
+                   Files))))

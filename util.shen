@@ -10,6 +10,11 @@
                   X)
          (shen.elim-def (shen.proc-input+ X))))
 
+(define read-shen
+  File -> (unwind-protect (freeze (do (undefmacro shen.function-macro)
+                                      (read-file File)))
+            (freeze (shen.add-macro shen.function-macro))))
+
 (define mktype
   Name Code -> [define (concat Name -type) | Code])
 

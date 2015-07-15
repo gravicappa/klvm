@@ -78,8 +78,7 @@
   (define set-backend-fn
     Backend Sym -> (let Name (make-string "klvm.bytecode.backend-~A->"
                                           (cut-package Sym))
-                     [[function [intern Name]] Backend [lambda (protect X)
-                                                         [Sym (protect X)]]]))
+                     [[function [intern Name]] Backend [function Sym]]))
 
   (define mk-backend-code
     Defs -> (let Mk [function [intern "klvm.bytecode.mk-backend-default"]]

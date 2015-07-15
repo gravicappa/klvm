@@ -2,7 +2,7 @@
                             klvm.bytecode.mk-backend'
                             klvm.bytecode.cut-package
                             klvm.bytecode.const
-                            klvm.bytecode.context-const
+                            klvm.bytecode.context-local-const
                             klvm.bytecode.context-frame-size
                             klvm.dbg
 
@@ -12,6 +12,15 @@
                             klvm.load-reg->
                             klvm.load-lambda->
                             klvm.load-const->
+
+                            klvm.arg-reg->
+                            klvm.arg-lambda->
+                            klvm.arg-const->
+
+                            klvm.tail-arg-reg->
+                            klvm.tail-arg-lambda->
+                            klvm.tail-arg-const->
+
                             klvm.jump
                             klvm.closure-lambda->
                             klvm.closure-reg->
@@ -81,10 +90,16 @@
                    where (symbol? X))
 
 (define arg->
-  To [klvm.reg From] C Acc -> [[klvm.load-reg-> To From] | Acc]
+  To [klvm.reg From] C Acc -> [[klvm.arg-reg-> To From] | Acc]
   To [klvm.lambda L] C Acc -> (let X (klvm.bytecode.const L lambda C)
-                                [[klvm.load-lambda-> To X] | Acc])
-  To X C Acc -> [[klvm.load-const-> To (const X C)] | Acc])
+                                [[klvm.arg-lambda-> To X] | Acc])
+  To X C Acc -> [[klvm.arg-const-> To (const X C)] | Acc])
+
+(define tail-arg->
+  To [klvm.reg From] C Acc -> [[klvm.tail-arg-reg-> To From] | Acc]
+  To [klvm.lambda L] C Acc -> (let X (klvm.bytecode.const L lambda C)
+                                [[klvm.tail-arg-lambda-> To X] | Acc])
+  To X C Acc -> [[klvm.tail-arg-const-> To (const X C)] | Acc])
 
 (define call-args
   [] _ _ C Acc -> Acc
@@ -94,7 +109,7 @@
 
 (define tail-call-args
   [] _ Acc -> Acc
-  [[I | X] | Xs] C Acc -> (tail-call-args Xs C (arg-> I X C Acc)))
+  [[I | X] | Xs] C Acc -> (tail-call-args Xs C (tail-arg-> I X C Acc)))
 
 (define load-ret
   [] Acc -> [[klvm.drop-ret] | Acc]
@@ -133,7 +148,7 @@
 
 (define emit-func
   Type Name Args Frame-size Frame-size-extra Code C Acc ->
-  (let Const (reverse (klvm.bytecode.context-const C))
+  (let Const (reverse (klvm.bytecode.context-local-const C))
        Code' (reverse Code)
     [[Type Name Args Frame-size Frame-size-extra Const Code'] | Acc]))
 
@@ -158,7 +173,7 @@
                                         pop-error-handler
                                         emit-func))
 
-(define klvm.bytecode.asm.from-kl
+(define from-kl
   X S+ -> (klvm.bytecode.compile X S+ (value backend)))
 
 (define str-join*
@@ -217,7 +232,7 @@
 
 (define print-const-table
   [] Stream -> true
-  [[X _ | Type] | Cs] Stream -> (let T' (klvm.bytecode.cut-package Type)
+  [[X Type | _] | Cs] Stream -> (let T' (klvm.bytecode.cut-package Type)
                                      X' (esc-const X)
                                      . (pr (make-string "const ~A ~S~%" T' X')
                                            Stream)

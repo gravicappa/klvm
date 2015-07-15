@@ -16,10 +16,15 @@
   (frame-size number)
   (frame-size-extra number)
   (nargs number)
-  (toplevel (list A))
-  (const table)
+  (code (list A))
+  (global-const (list A))
+  (local-const (list A))
   (jumps table)
   (backend backend))
+
+(define mk-context'
+  Backend -> (let Code ((backend-mk-code Backend))
+               (mk-context _ _ 0 0 0 Code [] [] _ Backend)))
 
 (klvm.bytecode.def-backend backend
   (native (A --> klvm.context --> A) (X C) C)
@@ -46,18 +51,29 @@
              (Type Name Args Frame-size Frame-size-extra Code C Acc)
              C))
 
-(define ensure-const*
-  X Type N [] List -> (@p N [[X N | Type] | List])
-  X Type N [[X I | Type] | Ys] List -> (@p I List)
-  X Type N [_ | Ys] List -> (ensure-const* X Type (+ N 1) Ys List))
-
 (define ensure-const
-  X Type List -> (ensure-const* X Type 0 List List))
+  X Type N [] Add -> (Add X Type N)
+  X Type _ [[X Type I | _] | Entries] _ -> I
+  X Type N [_ | Entries] Add -> (ensure-const X Type (+ N 1) Entries Add))
+
+(define global-const-add
+  C X Type I -> (let Entries (context-global-const C)
+                     . (context-global-const-> C [[X Type I] | Entries])
+                  I))
+
+(define local-const-add
+  C X Type I -> (let Global (ensure-global-const X Type C)
+                     Entries (context-local-const C)
+                     . (context-local-const-> C [[X Type I | Global] | Entries])
+                  I))
+
+(define ensure-global-const
+  X Type C -> (let Entries (context-global-const C)
+                (ensure-const X Type 0 Entries (global-const-add C))))
 
 (define const
-  X Type C -> (let R (ensure-const X Type (context-const C))
-                   . (context-const-> C (snd R))
-                (fst R)))
+  X Type C -> (let Entries (context-local-const C)
+                (ensure-const X Type 0 Entries (local-const-add C))))
 
 (define reg->
   To [klvm.reg From] C Acc -> (load-reg To From C Acc)
@@ -82,7 +98,8 @@
 (define put-call-args
   [] _ Acc -> Acc
   [[I | X] | Xs] I Acc -> (put-call-args Xs (+ I 1) (arg-> X Acc))
-  [[I | X] | Xs] Off Acc -> (error "Non tailcall args is not sequential."))
+  [[I | X] | Xs] Off Acc -> (error "~A: Non tailcall args is not sequential."
+                                   put-call-args))
 
 (define put-tail-call-args
   [] _ Acc -> Acc
@@ -144,30 +161,34 @@
   [klvm.push-error-handler E] C Acc -> (push-error-handler E C Acc)
   [klvm.pop-error-handler] C Acc -> (pop-error-handler C Acc)
   [] _ Acc -> Acc
-  X _ _ <- (do (output "klvm.bytecode.walk-x1: Unexpected L1 expression: ~S~%"
-                       X)
+  X _ _ <- (do (output "~A: Unexpected L1 expression: ~S~%" walk-x1 X)
                (fail))
   _ _ Acc -> Acc
-  X _ _ -> (error "klvm.bytecode.walk-x1: Unexpected L1 expression: ~S~%" X))
+  X _ _ -> (error "~A: Unexpected L1 expression: ~S~%" walk-x1 X))
 
 (define walk-toplevel-expr
-  [Type Name Args Frame-size Frame-size-extra Code] S+ B Acc ->
+  [Type Name Args Frame-size Frame-size-extra Code] S+ B C ->
   (let Arity (length Args)
        Frame-size' (+ Frame-size S+)
-       C (mk-context Name Type Frame-size' Frame-size-extra Arity Acc [] [] B)
+       . (context-func-> C Name)
+       . (context-type-> C Type)
+       . (context-frame-size-> C Frame-size')
+       . (context-frame-size-extra-> C Frame-size-extra)
+       . (context-nargs-> C Arity)
+       . (context-local-const-> C [])
        X (walk-x1 Code C (mk-code C))
-       Acc' (context-toplevel C)
-    (emit-func Type Name Args Frame-size' Frame-size-extra X C Acc'))
-  X _ _ _ -> (error "klvm.bytecode.walk-toplevel-expr: unexpected expr ~S~%"
-                    X))
+       A (context-code C)
+       A (emit-func Type Name Args Frame-size' Frame-size-extra X C A)
+    (context-code-> C A))
+  X _ _ _ -> (error "~A: unexpected expr ~S~%" walk-toplevel-expr X))
 
 (define walk-toplevel
-  [] S B Acc -> ((backend-prep-code B) _ Acc)
-  [X | Xs] S B Acc -> (walk-toplevel Xs S B (walk-toplevel-expr X S B Acc)))
+  [] S B C -> ((backend-prep-code B) C (context-code C))
+  [X | Xs] S B C -> (do (walk-toplevel-expr X S B C)
+                        (walk-toplevel Xs S B C)))
 
 (define klvm.bytecode.compile
-  X S+ B -> (let Code ((backend-mk-code B))
+  X S+ B -> (let C (mk-context' B)
                  S1 (klvm.s1.translate (backend-native B) X true)
-              (walk-toplevel S1 S+ B Code)))
-)
+              (walk-toplevel S1 S+ B C))))
 
