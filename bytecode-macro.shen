@@ -29,8 +29,8 @@
 
   (define xbin-func
     X -> X where (number? X)
-    [| X | Xs] -> (unwind-expr binary.bitwise-ior [X | Xs])
-    [& X | Xs] -> (unwind-expr binary.bitwise-and [X | Xs])
+    [| X | Xs] -> (unwind-expr (function binary.bitwise-ior) [X | Xs])
+    [& X | Xs] -> (unwind-expr (function binary.bitwise-and) [X | Xs])
     [>> X Y] -> (binary.arithmetic-shift (xbin-func X) (- 0 (xbin-func Y)))
     [<< X Y] -> (binary.arithmetic-shift (xbin-func X) (xbin-func Y)))
 
@@ -107,4 +107,5 @@
 
   (defmacro xbin-macro
     [klvm.bytecode.xbin X] -> (xbin-func X)
+    [klvm.bytecode.bin.xbin X] -> (xbin-func X)
     [klvm.bytecode.bin X] -> (bin-func X) where (number? X)))

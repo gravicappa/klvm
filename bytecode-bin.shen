@@ -1,29 +1,51 @@
 (package klvm.bytecode.bin [klvm.bytecode.walk
+                            klvm.bytecode.compile
                             klvm.bytecode.mk-backend'
                             klvm.bytecode.def-enum
                             klvm.bytecode-from-kl
+                            klvm.bytecode.context-local-const
+                            klvm.bytecode.context-global-const
+                            klvm.bytecode.context-frame-size
+                            klvm.bytecode.const 
 
-                            binary.mkbuf
-                            binary.buf-size
-                            binary.uint-size
+                            klvm.s1.func
+                            klvm.s1.lambda
+                            klvm.s1.toplevel
+
+                            binary.mkstream
+                            binary.bytestream-size
+                            binary.uint8?
+                            binary.uint16?
+                            binary.uint32?
+                            binary.uint64?
+                            binary.int8?
+                            binary.int16?
+                            binary.int32?
+                            binary.int64?
                             binary.sint-size
-                            binary.put-buf
-                            binary.buf-buf
+                            binary.put-bytestream
                             binary.put-u8
                             binary.put-u16
                             binary.put-u32
                             binary.put-i8
                             binary.put-i16
                             binary.put-i32
+                            binary.put-string
+                            binary.bitwise-ior
+                            binary.arithmetic-shift
+                            binary.bytevector-from-bytestream
 
                             klvm.lambda
                             klvm.reg]
 
-(set magic 1424424960) \\ #x54e70000
+\\ TODO: make hex reader macro
+(define magic -> 1424424960) \\ #x54e70000
 
 (klvm.bytecode.def-enum
   type.nil
-  type.bool
+  type.bool/true
+  type.bool/false
+  type.fail
   type.func
   type.lambda
   type.str
@@ -64,75 +86,81 @@
   op.<=
   op./=)
 
-(define arg.const1 -> (bin 10000000))
-(define arg.const2 -> (bin 11000000))
-(define arg.const3 -> (bin 11100000))
-(define arg.reg2 -> (bin 11111111))
-(define arg.reg3 -> (bin 11111110))
-
 (define const-type
   [] -> nil
-  X -> bool where (boolean? X)
+  X -> bool where (= X true)
+  X -> bool where (= X false)
+  X -> fail where (= X (fail))
   X -> str where (string? X)
   X -> sym where (symbol? X)
-  X -> i16 where (and (number? X) (<= (binary.sint-size X) 2))
-  X -> i32 where (and (number? X) (<= (binary.sint-size X) 4))
-  X -> i64 where (and (number? X) (<= (binary.sint-size X) 8)))
-
-(define const-type-op
-  nil -> (type.nil)
-  bool -> (type.bool)
-  func -> (type.func)
-  lambda -> (type.lambda)
-  str -> (type.str)
-  sym -> (type.sym)
-  vec -> (type.vec)
-  i16 -> (type.i16)
-  i32 -> (type.i32)
-  i64 -> (type.i64))
+  X -> i16 where (and (number? X) (binary.int16? X))
+  X -> i32 where (and (number? X) (binary.int32? X))
+  X -> i64 where (and (number? X) (binary.int64? X)))
 
 (define const
   X C -> (klvm.bytecode.const X (const-type X) C))
 
 (define const-lambda
-  L C -> (klvm.bytecode.const* L lambda C))
+  L C -> (klvm.bytecode.const L lambda C))
 
 (define const-func
-  F C -> (klvm.bytecode.const* F func C))
+  F C -> (klvm.bytecode.const F func C))
 
 (define native
   _ _ -> (fail))
 
 (define mk-code
-  -> (binary.mkbuf 16))
+  -> (binary.mkstream))
 
 (define code-len
-  Buf -> (binary.buf-size Buf))
+  Buf -> (binary.bytestream-size Buf))
 
 (define code-append!
-  To From -> (binary.put-buf From To))
+  To From -> (binary.put-bytestream From To))
 
 (define op-value+
   0 Buf -> Buf
   X Buf -> (binary.put-u8 X (binary.put-u8 (op.+u8) Buf))
-           where (<= (binary.uint-size X) 1)
+           where (binary.uint8? X)
   X Buf -> (binary.put-u16 X (binary.put-u8 (op.+u16) Buf))
-           where (<= (binary.uint-size X) 2)
+           where (binary.uint16? X)
   X Buf -> (binary.put-u32 X (binary.put-u8 (op.+u32) Buf))
-           where (<= (binary.uint-size X) 4)
-  X _ -> (error "~A: index value is too large ~A" op-value+ X))
+           where (binary.uint32? X)
+  X _ -> (error "~A: value is too large ~A" op-value+ X))
 
 (define op-value
   X _ _ -> (error "~A: Negative argument: ~A" op-value X) where (< X 0)
-  X Mask Buf -> (binary.put-u8 (xbin (| X Mask)) Buf) where (<= X 63)
+  X Mask Buf -> (binary.put-u8 (binary.bitwise-ior X Mask) Buf)where (< X 64)
   X Mask Buf -> (let X' (binary.arithmetic-shift X -5)
                   (op-value X Mask (op-value+ X' Buf))))
+
+(define const-ref
+  X Buf -> (binary.put-u8 X Buf) where (< X 128)
+  X Buf -> (binary.put-u8 X (binary.put-u8 (op.+u8) Buf))
+           where (binary.uint8? X)
+  X Buf -> (binary.put-u16 X (binary.put-u8 (op.+u16) Buf))
+           where (binary.uint16? X)
+  X Buf -> (binary.put-u32 X (binary.put-u8 (op.+u32) Buf))
+           where (binary.uint32? X)
+  X _ -> (error "~A: value is too large ~A" const-ref X))
 
 (define op-value/1
   X Buf -> (op-value X 0 Buf))
 
 (define op-value/2
-  X Buf -> (op-value X (bin 01000000) Buf))
+  X Buf -> (op-value X (klvm.bytecode.bin 01000000) Buf))
+
+(define strlen'
+  S I -> (trap-error (do (pos S I)
+                         (strlen' S (+ I 1)))
+                     (/. E I)))
+
+(define strlen
+  S -> (strlen' S 0))
+
+(define put-str
+  S Buf -> (let Buf (binary.put-u32 (strlen S) Buf)
+              (binary.put-string S Buf)))
 
 (define reg->
   X Buf -> (op-value/1 X Buf))
@@ -158,7 +186,7 @@
   Reg _ Buf -> (op1 (op.ret-reg) Reg Buf))
 
 (define ret-lambda
-  Fn C Buf -> (op1 (op.ret-const) (const Fn func C) Buf))
+  Fn C Buf -> (op1 (op.ret-const) (const-func Fn C) Buf))
 
 (define ret-const
   X C Buf -> (op1 (op.ret-const) (const X C) Buf))
@@ -215,7 +243,7 @@
 (define tailcall
   F Nargs Args C Buf -> (let Buf (closure-tail-> F Nargs C Buf)
                              Buf (put-tailcall-args Args C Buf)
-                          (binary.put-u8 (op.tail-call))))
+                          (binary.put-u8 (op.tail-call) Buf)))
 
 (define if-reg-expr
   Reg Else-Offset C Buf -> (op2 (op.jump-unless) Reg Else-Offset Buf))
@@ -226,33 +254,78 @@
 (define pop-error-handler
   _ Buf -> (binary.put-u8 (op.pop-error-handler) Buf))
 
-\*
+(define put-local-const-list'
+  [] Buf -> Buf
+  [[X Type I | Global] | Const] Buf -> (let Buf (const-ref Global Buf)
+                                         (put-local-const-list' Const Buf)))
+
+(define put-local-const-list
+  Const Buf -> (let Cbuf (put-local-const-list' Const (binary.mkstream))
+                    Buf (binary.put-u32 (binary.bytestream-size Cbuf) Buf)
+                 (binary.put-bytestream Cbuf Buf)))
+
+(define func-type-idx
+  klvm.s1.func -> (klvm.bytecode.bin 00000000)
+  klvm.s1.lambda -> (klvm.bytecode.bin 01000000)
+  klvm.s1.toplevel -> (klvm.bytecode.bin 10000000))
+
+(define func-header
+  Type Name Arity Frame-size Frame-size+ C Buf ->
+  (let Buf (binary.put-u8 (func-type-idx Type) Buf)
+       Buf (binary.put-u16 Arity Buf)
+       Buf (binary.put-u16 Frame-size Buf)
+       Buf (binary.put-u16 Frame-size+ Buf)
+    (put-str Name Buf)))
+
 (define emit-func
-  Type Name Args Frame-size Frame-size-extra Code C Buf ->
-  (let Const (reverse (klvm.bytecode.context-const C))
-       Code' (reverse Code)
-    [[Type Name Args Frame-size Frame-size-extra Const Code'] | Acc]))
-*\
-(define emit-func
-  Type Name Args Frame-size Frame-size-extra Code C Buf -> _)
+  Type Name Args Frame-size Frame-size+ Code C Buf ->
+  (let Arity (length Args)
+       . (output "\\ emitting header~%")
+       Buf (func-header Type Name Arity Frame-size Frame-size+ C Buf)
+       . (output "\\ emitting local const list~%")
+       Buf (put-local-const-list (klvm.bytecode.context-local-const C) Buf)
+       . (output "\\ emitting code Code: ~S~%" Code)
+       Buf (binary.put-bytestream Code Buf)
+       . (output "\\ done emitting code Buf: ~S~%" Buf)
+    Buf))
+
+(define put-vec-const
+  X Type-op Buf -> (put-str X (binary.put-u8 Type-op Buf)))
 
 (define put-const
-  C Buf -> Buf)
+  X nil Buf -> (binary.put-u8 (type.nil) Buf)
+  true bool Buf -> (binary.put-u8 (type.bool/true) Buf)
+  false bool Buf -> (binary.put-u8 (type.bool/false) Buf)
+  X func Buf -> (put-vec-const X (type.func) Buf)
+  X lambda Buf -> (put-vec-const X (type.lambda) Buf)
+  X str Buf -> (put-vec-const X (type.str) Buf)
+  X sym Buf -> (put-vec-const X (type.sym) Buf)
+  X vec Buf -> (put-vec-const X (type.vec))
+  X i16 Buf -> (binary.put-u16 X (binary.put-u8 (type.i16) Buf))
+  X i32 Buf -> (binary.put-u32 X (binary.put-u8 (type.i32) Buf))
+  X i64 Buf -> (binary.put-u64 X (binary.put-u8 (type.i64) Buf)))
 
-(define put-toplevel
-  C Buf -> Buf)
+(define put-const-list
+  [] Buf -> Buf
+  [[X Type I | _] | Const] Buf -> (let Buf (put-const X Type Buf)
+                                    (put-const-list Const Buf)))
 
 (define module-header
-  C -> (let Buf (binary.mkbuf 16)
-            Buf (binary.put-u32 (magic))
-            Buf (put-const C Buf)
-            Buf (put-toplevel C Buf)
-          Buf))
+  C -> (let Buf (binary.mkstream)
+            Buf (binary.put-u32 (magic) Buf)
+            Const (klvm.bytecode.context-global-const C)
+            Cbuf (put-const-list Const (binary.mkstream))
+            Buf (binary.put-u32 (binary.bytestream-size Cbuf) Buf)
+         (binary.put-bytestream Cbuf Buf)))
 
 (define prep-code
-  C Buf -> (let Header (module-header C)
-                Buf (binary.put-buf Buf Header)
-             (binary.buf-buf Buf)))
+  C Code-buf -> (let Buf (module-header C)
+                     Buf (binary.put-u32
+                          (binary.bytestream-size Code-buf) Buf)
+                     Buf (binary.put-bytestream Code-buf Buf)
+                     . (output "~S: Code-buf: ~S~%" prep-code Code-buf)
+                     . (output "~S: Buf ~S~%" prep-code Buf)
+                  (binary.bytevector-from-bytestream Buf)))
 
 (set backend (klvm.bytecode.mk-backend' mk-code
                                         code-len

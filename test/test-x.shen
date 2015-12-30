@@ -4,8 +4,10 @@
                       klvm.s1.translate
                       klvm.s2.translate
                       klvm.bytecode.asm.from-kl 
+                      klvm.bytecode.bin.from-kl 
                       klvm.bytecode.asm.print
-                      klvm.func klvm.closure klvm.toplevel]
+                      klvm.func klvm.closure klvm.toplevel
+                      binary.bytevector-to-file]
 
   (define write
     (@p Code Test) Prefix -> 
@@ -18,7 +20,7 @@
          . (write-to-file S1 (s1 Code))
          . (write-to-file S2 (s2 Code))
          . (write-asm Code Sa)
-         . (write-to-file Sb ";; bytecodec#10;")
+         . (write-bytecode Code Sb)
       [Defs S1 S2 Sa Sb]))
 
   (define call-with-file-output
@@ -43,7 +45,10 @@
                     File
                     (/. F (klvm.bytecode.asm.print B F)))))
 
-  (define bytecode Code -> "")
+  (define write-bytecode
+    Code File -> (let B (klvm.bytecode.bin.from-kl Code 2)
+                      . (output "~S: ~S~%" write-bytecode B)
+                   (binary.bytevector-to-file File B)))
 
   (define fmt-vec
     V -> (let L (map (function fmt) (klvm.test.list-from-vec V))

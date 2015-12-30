@@ -4,7 +4,6 @@
       Magic: uint32 = 0x54e7XXXX where XXXX is a version number
       Const-list: const-list
       Func-list: func-list
-      Toplevel-code: vec
 
     const-list
       Size-bytes: uint32
@@ -27,10 +26,20 @@
       Func-list: func[]
 
     func 
-      Flags: u16 | [00]: type ....
+      Flags: u8 | [00]: type ....
       Arity: u16
+      Frame-size: u16
+      Frame-size+: u16
       Name: vec
+      Const: const-ref-list
       Code: vec
+
+    const-ref-list
+      Len: uint32
+      Table: const-ref[]
+
+    const-ref
+      Idx: 
 
 # Opcodes
 
