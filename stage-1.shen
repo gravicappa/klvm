@@ -1,6 +1,6 @@
 (package klvm.s1 [denest.translate walk skip
                   regkl.translate regkl.arg regkl.reg regkl.reg->
-                  regkl.closure regkl.func regkl.toplevel regkl.freeze
+                  regkl.lambda regkl.func regkl.toplevel regkl.freeze
                   regkl.trap-error
 
                   klvm.reg klvm.reg-> klvm.call klvm.tailcall klvm.tailif
@@ -237,7 +237,7 @@
        TL (context-toplevel C)
        A (closure-args (protect A) 0 Arity [])
        Fn (context-quote C)
-       . (context-toplevel-> C (walk-func regkl.closure F A Nregs Body Fn TL))
+       . (context-toplevel-> C (walk-func regkl.lambda F A Nregs Body Fn TL))
     (mk-closure [klvm.lambda F] Args Init Return-reg C Acc)))
 
 (define walk-x3
@@ -291,7 +291,7 @@
   [type X Type] Return-reg C Acc -> (do (warn-type)
                                         (walk-x2 X Return-reg C Acc))
   
-  [regkl.closure Args Nregs Init Body] Return-reg C Acc ->
+  [regkl.lambda Args Nregs Init Body] Return-reg C Acc ->
   (walk-closure Return-reg Args Nregs (mk-args Init C) Body C Acc)
   
   [regkl.freeze Nregs Init Body] Return-reg C Acc ->
@@ -353,13 +353,13 @@
   [regkl.arg R] _ true C Acc -> [[klvm.return [klvm.reg (func-arg R C)]]
                                  | Acc]
   [regkl.arg _] _ false _ Acc -> Acc
-  [regkl.closure | _] _ false _ Acc ->  Acc
+  [regkl.lambda | _] _ false _ Acc ->  Acc
   [regkl.freeze | _ ] _ false _ Acc -> Acc
 
   [regkl.reg-> R X2] Do? false C Acc ->
   (in-do (walk-x2 X2 (func-reg R C) C) Do? Acc)
 
-  [regkl.closure Args Nregs Init Body] Do? true C Acc ->
+  [regkl.lambda Args Nregs Init Body] Do? true C Acc ->
   (in-do (walk-closure [] Args Nregs (mk-args Init C) Body C) Do? Acc)
 
   [regkl.freeze Nregs Init Body] Do? true C Acc ->
@@ -374,7 +374,7 @@
 (define func-code
   regkl.func -> func
   regkl.toplevel -> toplevel
-  regkl.closure -> closure)
+  regkl.lambda -> klvm.s1.lambda)
 
 (define walk-func
   regkl.toplevel _ _ _ [] _ Toplevel -> Toplevel

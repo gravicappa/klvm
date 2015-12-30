@@ -1,18 +1,17 @@
 (package klvm.s2 [regkl.trap-error
                   
-                  klvm.call klvm.closure klvm.closure-> klvm.entry klvm.func
-                  klvm.func-obj klvm.goto klvm.goto-next klvm.if
-                  klvm.if-nargs>0 klvm.nargs klvm.nargs- klvm.nargs->
-                  klvm.nargs+ klvm.nargs-cond klvm.next klvm.next->
-                  klvm.nregs-> klvm.pop-error-handler klvm.push-error-handler
-                  klvm.put-closure-args klvm.reg klvm.reg-> klvm.ret
-                  klvm.ret-> klvm.return klvm.runtime klvm.sp+ klvm.sp-
-                  klvm.tailcall klvm.tailif klvm.thaw klvm.toplevel klvm.wipe
-                  klvm.lambda
+                  klvm.call klvm.closure-> klvm.entry klvm.func klvm.func-obj
+                  klvm.goto klvm.goto-next klvm.if klvm.if-nargs>0 klvm.nargs
+                  klvm.nargs- klvm.nargs-> klvm.nargs+ klvm.nargs-cond
+                  klvm.next klvm.next-> klvm.nregs-> klvm.pop-error-handler
+                  klvm.push-error-handler klvm.put-closure-args klvm.reg
+                  klvm.reg-> klvm.ret klvm.ret-> klvm.return klvm.runtime
+                  klvm.sp+ klvm.sp- klvm.tailcall klvm.tailif klvm.thaw
+                  klvm.toplevel klvm.wipe klvm.lambda
 
                   klvm.entry-template klvm.return-template
 
-                  klvm.s1.func klvm.s1.closure klvm.s1.toplevel klvm.s1.return
+                  klvm.s1.func klvm.s1.lambda klvm.s1.toplevel klvm.s1.return
                   klvm.s1.translate]
 
 (defstruct context
@@ -170,7 +169,7 @@
 (define func-hdr
   klvm.s1.func -> klvm.func
   klvm.s1.toplevel -> klvm.toplevel
-  klvm.s1.closure -> klvm.closure)
+  klvm.s1.lambda -> klvm.lambda)
 
 (define func-entry
   C -> (prepend [(entry-op (context-func-name C) (context-arity C)
@@ -193,7 +192,7 @@
        Hdr (func-hdr Type)
        Labels (reverse (context-func C))
     [[Hdr Name Args Frame-size' Labels] | Acc'])
-  where (element? Type [klvm.s1.func klvm.s1.closure klvm.s1.toplevel]))
+  where (element? Type [klvm.s1.func klvm.s1.lambda klvm.s1.toplevel]))
 
 (define walk-toplevel
   [] Acc -> (reverse Acc)

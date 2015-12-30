@@ -224,7 +224,7 @@
   X Body Args Env Used C -> (let Args' (reverse [X | Args])
                                  A (append Used Args')
                                  X (mk-closure-list A Body Env Used C)
-                              [closure Args' (context-nregs C) | X]))
+                              [regkl.lambda Args' (context-nregs C) | X]))
 
 (define walk-lambda
   X Code Args Env C -> (let U (used-vars [lambda X Code] Env)
