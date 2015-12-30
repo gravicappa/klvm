@@ -91,6 +91,9 @@ proc show_stat {var} {
   puts "  nclosures: $stat(%closure/n)"
   puts "  ntoplevels: $stat(%toplevel/n)"
   puts "  const_size_sys: [val stat %const_size_sys]"
+  puts "  const_size_sys1: [val stat %const_size_sys1]"
+  puts "  const_size_sys2: [val stat %const_size_sys2]"
+  puts "  const_size_sys3: [val stat %const_size_sys3]"
   puts "  const_size_module: [val stat %const_size_module]"
   puts "  const_size_func: [val stat %const_size_func]"
   puts "  call_size: [val stat %call_size]"
@@ -222,6 +225,7 @@ proc parse {var fd} {
     }
     process_funcall $op $args ctx stat
     process_constsize $op $args ctx stat
+    process_constsize1 $op $args ctx stat
 
     set call_args_ops {arg-reg-> arg-const-> arg-lambda-> tail-arg-reg->
                        tail-arg-const-> tail-arg-lambda->}
@@ -350,6 +354,32 @@ proc process_constsize {op arg var statvar} {
       incr stat(const/$type)
     }
   }
+}
+
+proc process_constsize1 {op arg var statvar} {
+  global const
+  upvar 1 $statvar stat
+  if {$op ne "const"} return
+  lassign $arg type val
+  if {![info exists const($type/$val)]} {
+    set const($type/$val) [array size const]
+    incr stat(%const_size_sys1) [const_size $type $val]
+    incr stat(%const_size_sys2) [const_size $type $val]
+    incr stat(%const_size_sys3) [const_size $type $val]
+  }
+  set idx $const($type/$val)
+  if {$idx < 64} {
+    set d 1
+  } elseif {$idx < 256} {
+    set d 2
+  } elseif {$idx < 65536} {
+    set d 3
+  } elseif {$val < 2 ** 32} {
+    set d 4
+  }
+  incr stat(%const_size_sys1) $d
+  incr stat(%const_size_sys2) 4
+  incr stat(%const_size_sys3) 2
 }
 
 proc process_callsize {op arg var statvar} {
