@@ -1,5 +1,6 @@
 (package klvm.test.x [klvm.test.str-join klvm.test.list-from-vec
                       klvm.test.str-from-sexpr 
+                      klvm.call-with-file-output
                       
                       klvm.s1.translate
                       klvm.s2.translate
@@ -23,13 +24,6 @@
          . (write-bytecode Code Sb)
       [Defs S1 S2 Sa Sb]))
 
-  (define call-with-file-output
-    File Fn -> (let F (open File out)
-                 (trap-error (do (Fn F)
-                                 (close F))
-                             (/. E (do (close F)
-                                       (error (error-to-string E)))))))
-
   (define s1
     Code -> (let S1 (klvm.s1.translate [] Code true)
               (klvm.test.str-from-sexpr "~R~%" S1)))
@@ -41,7 +35,7 @@
 
   (define write-asm
     Code File -> (let B (klvm.bytecode.asm.from-kl Code 2)
-                   (call-with-file-output
+                   (klvm.call-with-file-output
                     File
                     (/. F (klvm.bytecode.asm.print B F)))))
 

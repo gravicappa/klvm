@@ -1,4 +1,5 @@
-(package klvm.bytecode.bin [klvm.bytecode.walk
+(package klvm.bytecode.bin [klvm.call-with-file-output
+                            klvm.bytecode.walk
                             klvm.bytecode.compile
                             klvm.bytecode.mk-backend'
                             klvm.bytecode.def-enum
@@ -7,11 +8,13 @@
                             klvm.bytecode.context-global-const
                             klvm.bytecode.context-frame-size
                             klvm.bytecode.const 
+                            klvm.bytecode.cut-package 
 
                             klvm.s1.func
                             klvm.s1.lambda
                             klvm.s1.toplevel
 
+                            bytevector<-list
                             binary.mkstream
                             binary.bytestream-size
                             binary.uint8?
@@ -24,6 +27,7 @@
                             binary.int64?
                             binary.sint-size
                             binary.put-bytestream
+                            binary.put-bytevector
                             binary.put-u8
                             binary.put-u16
                             binary.put-u32
@@ -39,12 +43,12 @@
                             klvm.reg]
 
 \\ TODO: make hex reader macro
-(define magic -> 1424424960) \\ #x54e70000
+(define magic -> (bytevector<-list [84 231 0 0])) \\ #x54 #xe7
 
-(klvm.bytecode.def-enum
-  type.nil
-  type.bool/true
-  type.bool/false
+(klvm.bytecode.def-enum const-types
+  (type.nil 128)
+  type.bool-true
+  type.bool-false
   type.fail
   type.func
   type.lambda
@@ -55,7 +59,7 @@
   type.i32
   type.i64)
 
-(klvm.bytecode.def-enum
+(klvm.bytecode.def-enum ops
   (op.nop 128)
   op.+u8
   op.+u16
@@ -85,6 +89,25 @@
   op.>=
   op.<=
   op./=)
+
+(define display-enum'
+  [] Out -> (pr (make-string "~%") Out)
+  [N | Ns] Out -> (let N' (klvm.bytecode.cut-package N)
+                       . (pr (make-string "~A ~A~%" N' ((function N))) Out)
+                    (show-enum' Ns Out)))
+
+(define display-enum
+  Name Out -> (do (pr (make-string "~A~%" (klvm.bytecode.cut-package Name))
+                      Out)
+                  (show-enum' ((function (concat Name (intern "-names"))))
+                             Out)))
+
+(define display-enums
+  Out -> (do (show-enum const-types Out)
+             (show-enum ops Out)))
+
+(define print-enums-to-file
+  File -> (klvm.call-with-file-output File (function display-enums)))
 
 (define const-type
   [] -> nil
@@ -294,13 +317,13 @@
 
 (define put-const
   X nil Buf -> (binary.put-u8 (type.nil) Buf)
-  true bool Buf -> (binary.put-u8 (type.bool/true) Buf)
-  false bool Buf -> (binary.put-u8 (type.bool/false) Buf)
-  X func Buf -> (put-vec-const X (type.func) Buf)
-  X lambda Buf -> (put-vec-const X (type.lambda) Buf)
+  true bool Buf -> (binary.put-u8 (type.bool-true) Buf)
+  false bool Buf -> (binary.put-u8 (type.bool-false) Buf)
+  X func Buf -> (put-vec-const (str X) (type.func) Buf)
+  X lambda Buf -> (put-vec-const (str X) (type.lambda) Buf)
   X str Buf -> (put-vec-const X (type.str) Buf)
-  X sym Buf -> (put-vec-const X (type.sym) Buf)
-  X vec Buf -> (put-vec-const X (type.vec))
+  X sym Buf -> (put-vec-const (str X) (type.sym) Buf)
+  X vec Buf -> (put-vec-const (str X) (type.vec))
   X i16 Buf -> (binary.put-u16 X (binary.put-u8 (type.i16) Buf))
   X i32 Buf -> (binary.put-u32 X (binary.put-u8 (type.i32) Buf))
   X i64 Buf -> (binary.put-u64 X (binary.put-u8 (type.i64) Buf)))
@@ -312,7 +335,7 @@
 
 (define module-header
   C -> (let Buf (binary.mkstream)
-            Buf (binary.put-u32 (magic) Buf)
+            Buf (binary.put-bytevector (magic) Buf)
             Const (klvm.bytecode.context-global-const C)
             Cbuf (put-const-list Const (binary.mkstream))
             Buf (binary.put-u32 (binary.bytestream-size Cbuf) Buf)

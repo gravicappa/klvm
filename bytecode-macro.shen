@@ -12,14 +12,27 @@
     S -> (intern (cut-package* (str S) "")))
 
   (define collect-enum-defs
-    [] Val Acc -> (reverse Acc)
-    [[C V] | Xs] Val Acc -> (collect-enum-defs Xs (+ V 1) [[define C -> V]
-                                                           | Acc])
-    [C | Xs] Val Acc -> (collect-enum-defs Xs (+ Val 1) [[define C -> Val]
-                                                         | Acc]))
+    [] _ Acc -> (reverse Acc)
+    [[C V] | Xs] Val Acc -> (collect-enum-defs Xs (+ V 1) [[C | V] | Acc])
+    [C | Xs] Val Acc -> (collect-enum-defs Xs (+ Val 1) [[C | Val] | Acc]))
+
+  (define mk-enum-values
+    [] Acc -> (reverse Acc)
+    [[N | V] | Defs] Acc -> (mk-enum-values Defs [[define N -> V] | Acc]))
+
+  (define unwrap-list
+    [] -> []
+    [X | Xs] -> [cons X (unwrap-list Xs)])
+
+  (define mk-enum-names
+    Name List -> [define (concat Name (intern "-names"))
+                   -> (unwrap-list List)])
 
   (define klvm.bytecode.def-enum-func
-    Defs -> [package null [] | (collect-enum-defs Defs 0 [])])
+    Name Defs -> (let Items (collect-enum-defs Defs 0 [])
+                      Names (mk-enum-names Name (map head Items))
+                      Enums (mk-enum-values Items [Names])
+                   [package null [] | Enums]))
 
   (define unwind-expr
     _ [X] -> (xbin-func X)
@@ -103,7 +116,7 @@
                                        | (unwrap-package-null X [])])
 
   (defmacro def-enum-macro
-    [klvm.bytecode.def-enum | Defs] -> (def-enum-func Defs))
+    [klvm.bytecode.def-enum Name | Defs] -> (def-enum-func Name Defs))
 
   (defmacro xbin-macro
     [klvm.bytecode.xbin X] -> (xbin-func X)

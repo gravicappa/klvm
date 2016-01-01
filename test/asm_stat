@@ -94,6 +94,7 @@ proc show_stat {var} {
   puts "  const_size_sys1: [val stat %const_size_sys1]"
   puts "  const_size_sys2: [val stat %const_size_sys2]"
   puts "  const_size_sys3: [val stat %const_size_sys3]"
+  puts "  const_size_sys4: [val stat %const_size_sys4]"
   puts "  const_size_module: [val stat %const_size_module]"
   puts "  const_size_func: [val stat %const_size_func]"
   puts "  call_size: [val stat %call_size]"
@@ -329,43 +330,72 @@ proc const_size {type val} {
   }
 }
 
-proc process_constsize {op arg var statvar} {
-  upvar 1 $var ctx
-  upvar 1 $statvar stat
-  switch -- $op {
-    const {
-      #puts stderr [list const: $arg]
-      lassign $arg type val
-      set size [const_size $type $val]
-      if {[info exists stat(@sys/$type/$val)]} {
-        incr stat(%const_size_sys) 4
-      } else {
-        incr stat(%const_size_sys) $size
-        set stat(@sys/$type/$val) -
+proc const_size1 {type val} {
+  switch -- $type {
+    num {
+      if {$val >= 0 && $val < 128} {
+        return 1
       }
-      if {[info exists stat(@mod/$type/$val)]} {
-        incr stat(%const_size_module) 4
+      if {$val < -(2 ** 32)} {
+        return 8
+      } elseif {$val * 2 < -65536} {
+        return 4
+      } elseif {$val * 2 < -256} {
+        return 2
+      } elseif {$val * 2 < 0} {
+        return 1
+      } elseif {$val * 2 < 256} {
+        return 1
+      } elseif {$val * 2 < 65536} {
+        return 2
+      } elseif {$val * 2 < 2 ** 32} {
+        return 4
       } else {
-        incr stat(%const_size_module) $size
-        set stat(@mod/$type/$val) -
+        return 8
       }
-      incr stat(%const_size_func) $size
-      incr stat(const/n)
-      incr stat(const/$type)
+    }
+    bool - nil {return 1}
+    lambda - func - sym - str {
+      return [expr {4 + [string length $val]}]
     }
   }
 }
 
+proc process_constsize {op arg var statvar} {
+  if {$op ne "const"} return
+  upvar 1 $var ctx
+  upvar 1 $statvar stat
+  #puts stderr [list const: $arg]
+  lassign $arg type val
+  set size [const_size $type $val]
+  if {[info exists stat(@sys/$type/$val)]} {
+    incr stat(%const_size_sys) 4
+  } else {
+    incr stat(%const_size_sys) $size
+    set stat(@sys/$type/$val) -
+  }
+  if {[info exists stat(@mod/$type/$val)]} {
+    incr stat(%const_size_module) 4
+  } else {
+    incr stat(%const_size_module) $size
+    set stat(@mod/$type/$val) -
+  }
+  incr stat(%const_size_func) $size
+  incr stat(const/n)
+  incr stat(const/$type)
+}
+
 proc process_constsize1 {op arg var statvar} {
+  if {$op ne "const"} return
   global const
   upvar 1 $statvar stat
-  if {$op ne "const"} return
   lassign $arg type val
   if {![info exists const($type/$val)]} {
     set const($type/$val) [array size const]
     incr stat(%const_size_sys1) [const_size $type $val]
     incr stat(%const_size_sys2) [const_size $type $val]
     incr stat(%const_size_sys3) [const_size $type $val]
+    incr stat(%const_size_sys4) [const_size1 $type $val]
   }
   set idx $const($type/$val)
   if {$idx < 64} {
@@ -380,6 +410,7 @@ proc process_constsize1 {op arg var statvar} {
   incr stat(%const_size_sys1) $d
   incr stat(%const_size_sys2) 4
   incr stat(%const_size_sys3) 2
+  incr stat(%const_size_sys4) $d
 }
 
 proc process_callsize {op arg var statvar} {
