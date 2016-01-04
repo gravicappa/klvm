@@ -28,7 +28,6 @@
                             binary.int16?
                             binary.int32?
                             binary.int64?
-                            binary.sint-size
                             binary.put-bytestream
                             binary.put-bytevector
                             binary.put-u8
@@ -39,8 +38,10 @@
                             binary.put-i32
                             binary.put-string
                             binary.bitwise-ior
+                            binary.bitwise-and
                             binary.arithmetic-shift
                             binary.bytevector-from-bytestream
+                            bytevector-length
 
                             klvm.lambda
                             klvm.reg]
@@ -112,6 +113,26 @@
 (define print-enums-to-file
   File -> (klvm.call-with-file-output File (function display-enums)))
 
+\*
+(define binary.put-u8
+  X Stream -> Stream)
+
+(define binary.put-u16
+  X Stream -> Stream)
+
+(define binary.put-u32
+  X Stream -> Stream)
+
+(define binary.put-bytestream
+  X Stream -> Stream)
+
+(define binary.put-bytevector
+  X Stream -> Stream)
+
+(define binary.put-string
+  X Stream -> Stream)
+*\
+
 (define const-type
   [] -> nil
   X -> bool where (= X true)
@@ -156,9 +177,10 @@
 
 (define op-value
   X _ _ -> (error "~A: Negative argument: ~A" op-value X) where (< X 0)
-  X Mask Buf -> (binary.put-u8 (binary.bitwise-ior X Mask) Buf)where (< X 64)
-  X Mask Buf -> (let X' (binary.arithmetic-shift X -5)
-                  (op-value X Mask (op-value+ X' Buf))))
+  X Mask Buf -> (binary.put-u8 (binary.bitwise-ior X Mask) Buf) where (< X 64)
+  X Mask Buf -> (let Hi (binary.arithmetic-shift X -5)
+                     Lo (binary.bitwise-and X 63)
+                  (op-value Lo Mask (op-value+ Hi Buf))))
 
 (define const-ref
   X Buf -> (binary.put-u8 X Buf) where (< X 128)

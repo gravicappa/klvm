@@ -9,4 +9,5 @@
                          "bytecode.shen"
                          "bytecode-asm.shen"
                          "bytecode-bin.shen"
+                         "shen.shen"
                          ]])
