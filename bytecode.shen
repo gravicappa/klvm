@@ -2,6 +2,7 @@
 
                         klvm.bytecode.walk
                         klvm.dbg
+                        klvm.kl-from-shen
 
                         klvm.s1.const?
 
@@ -179,7 +180,8 @@
        X (walk-x1 Code C (mk-code C))
        A (context-code C)
        A (emit-func Type Name Args Frame-size' Frame-size-extra X C A)
-    (context-code-> C A))
+       . (context-code-> C A)
+    _)
   X _ _ _ -> (error "~A: unexpected expr ~S~%" walk-toplevel-expr X))
 
 (define walk-toplevel
@@ -190,5 +192,15 @@
 (define klvm.bytecode.compile
   X S+ B -> (let C (mk-context' B)
                  S1 (klvm.s1.translate (backend-native B) X true)
-              (walk-toplevel S1 S+ B C))))
+                 . (output "klvm.bytecode.compile produced S1~%")
+              (walk-toplevel S1 S+ B C)))
+
+(define kl-from-files'
+  [] Acc -> (reverse Acc)
+  [F | Fs] Acc -> (let Kl (klvm.kl-from-shen (read-file F))
+                    (kl-from-files' Fs (append (reverse Kl) Acc))))
+
+(define kl-from-files
+  Files -> (kl-from-files' Files []))
+)
 

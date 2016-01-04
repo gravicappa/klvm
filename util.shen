@@ -73,12 +73,17 @@
   walk P T [X | Xs] L -> (P [X | (map (walk-klvm P T (+ L 1)) Xs)] L)
   _ P _ X L -> (P X L))
 
+(define call-with-open-file
+  F Fn -> (trap-error (do (Fn F)
+                          (close F))
+                      (/. E (do (close F)
+                                (error (error-to-string E))))))
+
 (define call-with-file-output
-  File Fn -> (let F (open File out)
-               (trap-error (do (Fn F)
-                               (close F))
-                           (/. E (do (close F)
-                                     (error (error-to-string E))))))))
+  File Fn -> (call-with-open-file (open File out) Fn))
+
+(define call-with-file-input
+  File Fn -> (call-with-open-file (open File in) Fn)))
 
 (defmacro klvm.defprim-macro
   [klvm.define-primitives Name | Code] -> (klvm.defprim Name Code))

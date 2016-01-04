@@ -1,9 +1,12 @@
-(package klvm.bytecode.asm [klvm.bytecode.compile
+(package klvm.bytecode.asm [klvm.call-with-file-output
+                            klvm.kl-from-shen
+                            klvm.bytecode.compile
                             klvm.bytecode.mk-backend'
                             klvm.bytecode.cut-package
                             klvm.bytecode.const
                             klvm.bytecode.context-local-const
                             klvm.bytecode.context-frame-size
+                            klvm.bytecode.kl-from-files
                             klvm.dbg
 
                             klvm.lambda
@@ -260,4 +263,22 @@
   [Asm | Asms] Stream -> (do (print-func Asm Stream)
                              (klvm.bytecode.asm.print Asms Stream)))
 
+(define print-to-file
+  File Code -> (klvm.call-with-file-output
+                File (klvm.bytecode.asm.print Code)))
+
+(define from-kl
+  X S+ -> (klvm.bytecode.compile X S+ (value backend)))
+
+(define from-shen
+  X S+ -> (from-kl (klvm.kl-from-shen X) S+))
+
+(define from-file
+  File S+ -> (from-shen (read-file File) S+))
+
+(define from-files
+  Files S+ -> (let Kl (klvm.bytecode.kl-from-files Files)
+                   . (output "Loaded KL~%")
+                   . (output " - length: ~S~%" (length Kl))
+                (from-kl Kl S+)))
 )

@@ -1,4 +1,6 @@
 (package klvm.bytecode.bin [klvm.call-with-file-output
+                            klvm.call-with-file-input
+                            klvm.kl-from-shen
                             klvm.bytecode.walk
                             klvm.bytecode.compile
                             klvm.bytecode.mk-backend'
@@ -9,6 +11,7 @@
                             klvm.bytecode.context-frame-size
                             klvm.bytecode.const 
                             klvm.bytecode.cut-package 
+                            klvm.bytecode.kl-from-files
 
                             klvm.s1.func
                             klvm.s1.lambda
@@ -298,18 +301,15 @@
        Buf (binary.put-u16 Arity Buf)
        Buf (binary.put-u16 Frame-size Buf)
        Buf (binary.put-u16 Frame-size+ Buf)
-    (put-str Name Buf)))
+    (put-str (str Name) Buf)))
 
 (define emit-func
   Type Name Args Frame-size Frame-size+ Code C Buf ->
   (let Arity (length Args)
-       . (output "\\ emitting header~%")
        Buf (func-header Type Name Arity Frame-size Frame-size+ C Buf)
-       . (output "\\ emitting local const list~%")
        Buf (put-local-const-list (klvm.bytecode.context-local-const C) Buf)
-       . (output "\\ emitting code Code: ~S~%" Code)
+       Buf (binary.put-u32 (binary.bytestream-size Code) Buf)
        Buf (binary.put-bytestream Code Buf)
-       . (output "\\ done emitting code Buf: ~S~%" Buf)
     Buf))
 
 (define put-vec-const
@@ -346,8 +346,6 @@
                      Buf (binary.put-u32
                           (binary.bytestream-size Code-buf) Buf)
                      Buf (binary.put-bytestream Code-buf Buf)
-                     . (output "~S: Code-buf: ~S~%" prep-code Code-buf)
-                     . (output "~S: Buf ~S~%" prep-code Buf)
                   (binary.bytevector-from-bytestream Buf)))
 
 (set backend (klvm.bytecode.mk-backend' mk-code
@@ -369,4 +367,23 @@
                                         emit-func))
 
 (define from-kl
-  X S+ -> (klvm.bytecode.compile X S+ (value backend))))
+  X S+ -> (klvm.bytecode.compile X S+ (value backend)))
+  
+(define from-shen
+  X S+ -> (from-kl (klvm.kl-from-shen X) S+))
+  
+(define from-string
+  Str S+ -> (from-shen (read-from-string Str) S+))
+
+(define from-file
+  File S+ -> (from-shen (read-file File) S+))
+
+(define from-files
+  Files S+ -> (let Kl (klvm.bytecode.kl-from-files Files)
+                   . (output "Loaded KL~%")
+                   . (output " - length: ~S~%" (length Kl))
+                   Bytecode (from-kl Kl S+)
+                   . (output " - bytecode length: ~S~%"
+                             (bytevector-length Bytecode))
+                Bytecode))
+)
